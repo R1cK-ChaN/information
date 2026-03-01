@@ -6,6 +6,7 @@ import abc
 import logging
 import re
 from typing import TYPE_CHECKING
+from urllib.parse import urljoin
 
 import httpx
 from bs4 import BeautifulSoup
@@ -116,6 +117,13 @@ class BaseFetcher(abc.ABC):
             if m:
                 return self._normalize_date(m.group(0))
         return None
+
+    @staticmethod
+    def _resolve_url(href: str, base_url: str) -> str:
+        """Resolve a possibly-relative href against a base URL."""
+        if href.startswith("http"):
+            return href
+        return urljoin(base_url, href)
 
     def _normalize_date(self, raw: str) -> str:
         """Best-effort date normalization to YYYY-MM-DD."""

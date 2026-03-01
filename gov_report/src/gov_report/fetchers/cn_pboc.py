@@ -60,9 +60,7 @@ class PBOCFetcher(BaseFetcher):
         for a in soup.find_all("a", href=True):
             text = a.get_text(strip=True)
             if any(kw in text for kw in keywords):
-                url = a["href"]
-                if not url.startswith("http"):
-                    url = _BASE_URL + url if url.startswith("/") else f"{_BASE_URL}/{url}"
+                url = self._resolve_url(a["href"], cfg["listing_url"])
 
                 if cfg.get("is_pdf") and url.endswith(".pdf"):
                     return [await self._fetch_pdf(url, cfg)]

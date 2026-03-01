@@ -39,9 +39,7 @@ class CustomsFetcher(BaseFetcher):
         for a in soup.find_all("a", href=True):
             text = a.get_text(strip=True)
             if any(kw in text for kw in keywords):
-                url = a["href"]
-                if not url.startswith("http"):
-                    url = _BASE_URL + url if url.startswith("/") else f"{_BASE_URL}/{url}"
+                url = self._resolve_url(a["href"], _LISTING_URL)
                 try:
                     return [await self.fetch_by_url(url)]
                 except Exception:

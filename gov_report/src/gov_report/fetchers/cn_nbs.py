@@ -81,9 +81,7 @@ class NBSFetcher(BaseFetcher):
         for a in soup.find_all("a", href=True):
             text = a.get_text(strip=True)
             if any(kw in text for kw in keywords):
-                url = a["href"]
-                if not url.startswith("http"):
-                    url = _BASE_URL + url if url.startswith("/") else f"{_BASE_URL}/{url}"
+                url = self._resolve_url(a["href"], cfg["listing_url"])
                 try:
                     return [await self.fetch_by_url(url)]
                 except Exception:
@@ -113,7 +111,13 @@ class NBSFetcher(BaseFetcher):
         return self.source_id
 
     def _extract_cn_date(self, html: str) -> str | None:
-        """Extract Chinese-format date and normalize to YYYY-MM-DD."""
+        """Extract publication date, trying meta tag first."""
+        soup = BeautifulSoup(html, "html.parser")
+        # 1. <meta name="PubDate" content="2026/02/11 09:30">
+        meta = soup.find("meta", attrs={"name": "PubDate"})
+        if meta and meta.get("content"):
+            return self._normalize_date(meta["content"])
+        # 2. Chinese format: 2026年2月11日
         m = re.search(r"(\d{4})年(\d{1,2})月(\d{1,2})日", html)
         if m:
             return f"{m.group(1)}-{int(m.group(2)):02d}-{int(m.group(3)):02d}"
