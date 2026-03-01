@@ -1,0 +1,141 @@
+"""Click CLI commands for doc-parser."""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import sys
+from pathlib import Path
+
+import click
+from rich.console import Console
+
+from doc_parser.config import get_settings
+
+console = Console()
+
+
+def _setup_logging(verbose: bool) -> None:
+    level = logging.DEBUG if verbose else logging.INFO
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s %(levelname)-7s %(name)s  %(message)s",
+        datefmt="%H:%M:%S",
+    )
+
+
+@click.group()
+@click.option("--verbose", "-v", is_flag=True, help="Enable debug logging.")
+@click.pass_context
+def cli(ctx: click.Context, verbose: bool) -> None:
+    """doc-parser -- Finance report parsing pipeline."""
+    _setup_logging(verbose)
+    ctx.ensure_object(dict)
+    ctx.obj["verbose"] = verbose
+
+
+# ---------------------------------------------------------------------------
+# parse-local
+# ---------------------------------------------------------------------------
+
+
+@cli.command("parse-local")
+@click.argument("path", type=click.Path(exists=True, path_type=Path))
+@click.option("--force", is_flag=True, help="Re-process even if result exists.")
+@click.option("--parse-mode", default=None, help="TextIn parse mode override.")
+def parse_local(path: Path, force: bool, parse_mode: str | None) -> None:
+    """Full pipeline for a local file."""
+    from doc_parser.pipeline import process_local
+
+    settings = get_settings()
+    settings.ensure_dirs()
+
+    sha = asyncio.run(process_local(settings, path, force=force, parse_mode=parse_mode))
+
+    if sha:
+        console.print(f"[green]Done.[/green] sha256={sha[:12]}...")
+    else:
+        console.print("[yellow]Skipped (result exists, use --force).[/yellow]")
+
+
+# ---------------------------------------------------------------------------
+# re-extract
+# ---------------------------------------------------------------------------
+
+
+@cli.command("re-extract")
+@click.argument("sha_prefix")
+@click.option("--force", is_flag=True, help="Force re-extraction.")
+def re_extract_cmd(sha_prefix: str, force: bool) -> None:
+    """Re-run extraction using stored markdown (no re-parse)."""
+    from doc_parser.pipeline import re_extract
+    from doc_parser.storage import resolve_sha_prefix
+
+    settings = get_settings()
+    settings.ensure_dirs()
+
+    try:
+        sha = resolve_sha_prefix(settings.extraction_path, sha_prefix)
+    except ValueError as exc:
+        console.print(f"[red]{exc}[/red]")
+        sys.exit(1)
+
+    result = asyncio.run(re_extract(settings, sha, force=force))
+
+    if result:
+        console.print(
+            f"[green]Re-extracted.[/green] title={result.get('title')}, "
+            f"institution={result.get('institution')}"
+        )
+    else:
+        console.print("[red]Re-extraction failed.[/red]")
+
+
+# ---------------------------------------------------------------------------
+# Utilities
+# ---------------------------------------------------------------------------
+
+
+@cli.command("status")
+def status() -> None:
+    """Show result counts from directory scan."""
+    from doc_parser.storage import list_results
+
+    settings = get_settings()
+
+    results = list_results(settings.extraction_path)
+    total = len(results)
+
+    if total == 0:
+        console.print("\n[yellow]No results found.[/yellow]")
+        return
+
+    # Count by source
+    sources: dict[str, int] = {}
+    institutions: dict[str, int] = {}
+    for r in results:
+        src = r.get("source", "unknown")
+        sources[src] = sources.get(src, 0) + 1
+        institution = r.get("institution") or r.get("broker") or "unknown"
+        institutions[institution] = institutions.get(institution, 0) + 1
+
+    console.print(f"\n[bold]Results: {total}[/bold]")
+
+    console.print("\n[bold]By Source[/bold]")
+    for src, count in sorted(sources.items()):
+        console.print(f"  {src}: {count}")
+
+    console.print("\n[bold]By Institution[/bold]")
+    for inst, count in sorted(institutions.items(), key=lambda x: -x[1])[:10]:
+        console.print(f"  {inst}: {count}")
+
+    console.print()
+
+
+def _human_size(nbytes: int) -> str:
+    """Convert bytes to a human-readable string."""
+    for unit in ("B", "KB", "MB", "GB"):
+        if nbytes < 1024:
+            return f"{nbytes:.1f} {unit}"
+        nbytes /= 1024  # type: ignore[assignment]
+    return f"{nbytes:.1f} TB"

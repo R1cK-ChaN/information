@@ -1,0 +1,275 @@
+"""TextIn API client for ParseX and entity extraction."""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+import httpx
+from tenacity import (
+    retry,
+    retry_if_exception,
+    stop_after_attempt,
+    wait_exponential,
+)
+
+from doc_parser.config import Settings
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
+
+PARSEX_ENDPOINT = "https://api.textin.com/ai/service/v1/x_to_markdown"
+
+# ---------------------------------------------------------------------------
+# Default params
+# ---------------------------------------------------------------------------
+
+DEFAULT_PARSEX_PARAMS = {
+    "pdf_parse_mode": "auto",
+    "remove_watermark": "1",
+    "md_detail": "2",
+    "md_table_flavor": "html",
+    "md_title": "1",
+    "pdf_dpi": "144",
+}
+
+# ---------------------------------------------------------------------------
+# Extraction field definitions
+# ---------------------------------------------------------------------------
+
+EXTRACTION_FIELDS = [
+    {"key": "title", "description": "Document title or report title"},
+    {"key": "institution", "description": "Publishing institution (e.g., Goldman Sachs, BLS, Federal Reserve, 国家统计局)"},
+    {"key": "authors", "description": "Author names, analysts or spokespersons"},
+    {"key": "publish_date", "description": "Publication date of the document"},
+    {"key": "data_period", "description": "Data reference period if applicable (e.g., 2025-01, Q4 2024), distinct from publish_date"},
+    {"key": "country", "description": "Country or region the document pertains to (e.g., US, CN, EU, Global)"},
+    {"key": "market", "description": "Financial market dimension (e.g., A股, US Treasuries, S&P 500)"},
+    {"key": "asset_class", "description": "High-level asset class (e.g., Fixed Income, Equity, FX, Commodity, Real Estate, Multi-Asset, Macro, Policy)"},
+    {"key": "sector", "description": "Specific sector or topic (e.g., Inflation, Labor Market, Healthcare, Technology, Gold, Interest Rate)"},
+    {"key": "document_type", "description": "Type of document (e.g., Research Report, Market Commentary, Official Press Release, Policy Statement, Meeting Minutes, Policy Report, Press Conference Transcript, Survey Report, News Article, Government Announcement)"},
+    {"key": "event_type", "description": "Event classification if applicable (e.g., Economic Release, Policy Statement, Press Conference, Survey, News Article)"},
+    {"key": "subject", "description": "Core subject or topic (e.g., CPI, Apple Inc., Federal Funds Rate, LPR)"},
+    {"key": "subject_id", "description": "Identifier for the subject if available (e.g., AAPL, CPIAUCSL)"},
+    {"key": "language", "description": "Document language (e.g., en, zh)"},
+    {"key": "contains_commentary", "description": "Whether the document contains qualitative commentary or analysis from officials/analysts (true or false)"},
+    {"key": "impact_level", "description": "Financial market impact level: 'critical' (bank failure, market crash, currency crisis), 'high' (rate decision, CPI, NFP, tariff, recession), 'medium' (inflation, yield, oil, bitcoin, earnings), 'low' (housing, hedge fund, regulation, geopolitics), or 'info' (no significant financial impact)"},
+    {"key": "confidence", "description": "Confidence in the impact_level classification, from 0.0 to 1.0 (e.g., 0.9 for critical, 0.8 for high, 0.7 for medium, 0.6 for low, 0.3 for info)"},
+]
+
+# ---------------------------------------------------------------------------
+# Result dataclasses
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class ParseResult:
+    """Structured result from a TextIn parse invocation."""
+
+    markdown: str = ""
+    detail: list[dict[str, Any]] = field(default_factory=list)
+    pages: list[dict[str, Any]] = field(default_factory=list)
+    elements: list[dict[str, Any]] = field(default_factory=list)
+    excel_base64: str | None = None
+    total_page_number: int = 0
+    valid_page_number: int = 0
+    duration_ms: int = 0
+    request_id: str = ""
+    has_chart: bool = False
+    has_table: bool = False
+    paragraphs: list[dict[str, Any]] = field(default_factory=list)
+    metrics: dict[str, Any] = field(default_factory=dict)
+    src_page_count: int = 0
+
+
+@dataclass
+class ExtractionResult:
+    """Result from entity extraction API."""
+
+    fields: dict[str, Any] = field(default_factory=dict)
+    category: dict[str, Any] = field(default_factory=dict)
+    detail_structure: list[dict[str, Any]] = field(default_factory=list)
+    page_count: int = 0
+    duration_ms: int = 0
+    request_id: str = ""
+
+
+# ---------------------------------------------------------------------------
+# Retry helper
+# ---------------------------------------------------------------------------
+
+
+def _is_retryable(exc: BaseException) -> bool:
+    """Determine whether an exception should trigger a retry."""
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code >= 500
+    if isinstance(exc, (httpx.ConnectError, httpx.ReadTimeout, httpx.WriteTimeout)):
+        return True
+    return False
+
+
+# ---------------------------------------------------------------------------
+# Client
+# ---------------------------------------------------------------------------
+
+
+class TextInClient:
+    """Client for the TextIn API suite."""
+
+    def __init__(self, settings: Settings) -> None:
+        self.app_id = settings.textin_app_id
+        self.secret_code = settings.textin_secret_code
+        self.default_parse_mode = settings.textin_parse_mode
+        self._client: httpx.AsyncClient | None = None
+
+    async def _get_client(self) -> httpx.AsyncClient:
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(
+                timeout=httpx.Timeout(300.0, connect=30.0),
+                headers={
+                    "x-ti-app-id": self.app_id,
+                    "x-ti-secret-code": self.secret_code,
+                },
+            )
+        return self._client
+
+    async def close(self) -> None:
+        if self._client and not self._client.is_closed:
+            await self._client.aclose()
+
+    def _parse_response(self, data: dict[str, Any], params: dict[str, str]) -> ParseResult:
+        """Convert the TextIn JSON response into a ParseResult."""
+        detail = data.get("detail", [])
+
+        # Check if any chart elements exist — either explicitly tagged by TextIn
+        # or image elements with substantial OCR text (axis labels, data points)
+        has_chart = any(
+            el.get("type") == "image"
+            and (el.get("sub_type") == "chart" or len(el.get("text", "")) > 50)
+            for el in detail
+        )
+
+        has_table = any(
+            el.get("type") == "table"
+            for el in detail
+        )
+
+        return ParseResult(
+            markdown=data.get("markdown", ""),
+            detail=detail,
+            pages=data.get("pages", []),
+            elements=detail,  # alias for downstream convenience
+            excel_base64=data.get("excel"),
+            total_page_number=data.get("total_page_number", 0),
+            valid_page_number=data.get("valid_page_number", 0),
+            duration_ms=data.get("duration", 0),
+            request_id=data.get("request_id", ""),
+            has_chart=has_chart,
+            has_table=has_table,
+            paragraphs=data.get("paragraphs", []),
+            metrics=data.get("metrics", {}),
+            src_page_count=data.get("src_page_count", 0),
+        )
+
+    # -------------------------------------------------------------------
+    # ParseX (x_to_markdown)
+    # -------------------------------------------------------------------
+
+    def _build_parsex_params(
+        self,
+        parse_mode: str | None = None,
+        get_excel: bool = True,
+        md_detail: int = 2,
+    ) -> dict[str, str]:
+        """Build query params for ParseX endpoint."""
+        params = dict(DEFAULT_PARSEX_PARAMS)
+        if parse_mode:
+            params["pdf_parse_mode"] = parse_mode
+        if get_excel:
+            params["get_excel"] = "1"
+        else:
+            params["get_excel"] = "0"
+        params["md_detail"] = str(md_detail)
+        return params
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=4, min=4, max=16),
+        retry=retry_if_exception(_is_retryable),
+        reraise=True,
+    )
+    async def parse_file_x(
+        self,
+        file_path: Path,
+        *,
+        parse_mode: str | None = None,
+        get_excel: bool = True,
+        md_detail: int = 2,
+    ) -> ParseResult:
+        """Parse a file via the TextIn ParseX (x_to_markdown) endpoint.
+
+        Returns ParseResult with markdown, detail, pages, paragraphs, metrics.
+        """
+        params = self._build_parsex_params(parse_mode, get_excel, md_detail)
+        file_bytes = file_path.read_bytes()
+
+        client = await self._get_client()
+        logger.info("ParseX %s (%d bytes, mode=%s)", file_path.name, len(file_bytes), params["pdf_parse_mode"])
+
+        resp = await client.post(
+            PARSEX_ENDPOINT,
+            params=params,
+            content=file_bytes,
+            headers={"Content-Type": "application/octet-stream"},
+        )
+        resp.raise_for_status()
+        body = resp.json()
+
+        code = body.get("code", 0)
+        if code != 200:
+            msg = body.get("message", "Unknown TextIn error")
+            raise TextInAPIError(code, msg)
+
+        result_data = body.get("result", {})
+        return self._parse_response(result_data, params)
+
+    def get_parsex_config(
+        self,
+        parse_mode: str | None = None,
+        get_excel: bool = True,
+        md_detail: int = 2,
+    ) -> dict[str, str]:
+        """Return the ParseX params dict — for DB storage."""
+        return self._build_parsex_params(parse_mode, get_excel, md_detail)
+
+
+
+# ---------------------------------------------------------------------------
+# Exceptions
+# ---------------------------------------------------------------------------
+
+
+class TextInAPIError(Exception):
+    """Raised when TextIn returns a non-200 code."""
+
+    def __init__(self, code: int, message: str) -> None:
+        self.code = code
+        self.message = message
+        super().__init__(f"TextIn API error {code}: {message}")
+
+
+
+# ---------------------------------------------------------------------------
+# Utilities
+# ---------------------------------------------------------------------------
+
+
+def decode_excel(b64: str) -> bytes:
+    """Decode a base64-encoded Excel file from the TextIn response."""
+    import base64
+    return base64.b64decode(b64)

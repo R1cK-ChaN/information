@@ -1,0 +1,1 @@
+"""Government economic report crawler."""

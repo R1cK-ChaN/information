@@ -1,0 +1,137 @@
+"""Feed registry: FeedInfo dataclass + ~60 macro-finance feed definitions."""
+
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class FeedInfo:
+    name: str
+    url: str
+    category: str
+
+
+def _gnews(query: str, when: str = "1d") -> str:
+    """Build a Google News RSS search URL."""
+    return f"https://news.google.com/rss/search?q={query}+when:{when}&hl=en-US&gl=US&ceid=US:en"
+
+
+# ── Feed definitions ──────────────────────────────────────────
+
+FEEDS: list[FeedInfo] = [
+    # ── markets (7) ───────────────────────────────────────────
+    FeedInfo("CNBC", "https://www.cnbc.com/id/100003114/device/rss/rss.html", "markets"),
+    FeedInfo("MarketWatch", _gnews("site:marketwatch.com+markets", "1d"), "markets"),
+    FeedInfo("Yahoo Finance", "https://finance.yahoo.com/rss/topstories", "markets"),
+    FeedInfo("Seeking Alpha", "https://seekingalpha.com/market_currents.xml", "markets"),
+    FeedInfo("Reuters Markets", _gnews("site:reuters.com+markets+stocks", "1d"), "markets"),
+    FeedInfo("Bloomberg Markets", _gnews("site:bloomberg.com+markets", "1d"), "markets"),
+    FeedInfo("Investing.com News", _gnews("site:investing.com+markets", "1d"), "markets"),
+
+    # ── forex (3) ─────────────────────────────────────────────
+    FeedInfo("Forex News", _gnews('("forex"+OR+"currency"+OR+"FX+market")+trading', "1d"), "forex"),
+    FeedInfo("Dollar Watch", _gnews('("dollar+index"+OR+DXY+OR+"US+dollar"+OR+"euro+dollar")', "2d"), "forex"),
+    FeedInfo("Central Bank Rates", _gnews('("central+bank"+OR+"interest+rate"+OR+"rate+decision"+OR+"monetary+policy")', "2d"), "forex"),
+
+    # ── bonds (3) ─────────────────────────────────────────────
+    FeedInfo("Bond Market", _gnews('("bond+market"+OR+"treasury+yields"+OR+"bond+yields"+OR+"fixed+income")', "2d"), "bonds"),
+    FeedInfo("Treasury Watch", _gnews('("US+Treasury"+OR+"Treasury+auction"+OR+"10-year+yield"+OR+"2-year+yield")', "2d"), "bonds"),
+    FeedInfo("Corporate Bonds", _gnews('("corporate+bond"+OR+"high+yield"+OR+"investment+grade"+OR+"credit+spread")', "3d"), "bonds"),
+
+    # ── commodities (4) ───────────────────────────────────────
+    FeedInfo("Oil & Gas", _gnews("(oil+price+OR+OPEC+OR+%22natural+gas%22+OR+%22crude+oil%22+OR+WTI+OR+Brent)", "1d"), "commodities"),
+    FeedInfo("Gold & Metals", _gnews("(gold+price+OR+silver+price+OR+copper+OR+platinum+OR+%22precious+metals%22)", "2d"), "commodities"),
+    FeedInfo("Agriculture", _gnews("(wheat+OR+corn+OR+soybeans+OR+coffee+OR+sugar)+price+OR+commodity", "3d"), "commodities"),
+    FeedInfo("Commodity Trading", _gnews('("commodity+trading"+OR+"futures+market"+OR+CME+OR+NYMEX+OR+COMEX)', "2d"), "commodities"),
+
+    # ── crypto (5) ────────────────────────────────────────────
+    FeedInfo("CoinDesk", "https://www.coindesk.com/arc/outboundfeeds/rss/", "crypto"),
+    FeedInfo("Cointelegraph", "https://cointelegraph.com/rss", "crypto"),
+    FeedInfo("The Block", _gnews("site:theblock.co", "1d"), "crypto"),
+    FeedInfo("Crypto News", _gnews('(bitcoin+OR+ethereum+OR+crypto+OR+"digital+assets")', "1d"), "crypto"),
+    FeedInfo("DeFi News", _gnews('(DeFi+OR+"decentralized+finance"+OR+DEX+OR+"yield+farming")', "3d"), "crypto"),
+
+    # ── centralbanks (6) ──────────────────────────────────────
+    FeedInfo("Federal Reserve", "https://www.federalreserve.gov/feeds/press_all.xml", "centralbanks"),
+    FeedInfo("ECB Watch", _gnews('("European+Central+Bank"+OR+ECB+OR+Lagarde)+monetary+policy', "3d"), "centralbanks"),
+    FeedInfo("BoJ Watch", _gnews('("Bank+of+Japan"+OR+BoJ)+monetary+policy', "3d"), "centralbanks"),
+    FeedInfo("BoE Watch", _gnews('("Bank+of+England"+OR+BoE)+monetary+policy', "3d"), "centralbanks"),
+    FeedInfo("PBoC Watch", _gnews('("People%27s+Bank+of+China"+OR+PBoC+OR+PBOC)', "7d"), "centralbanks"),
+    FeedInfo("Global Central Banks", _gnews('("rate+hike"+OR+"rate+cut"+OR+"interest+rate+decision")+central+bank', "3d"), "centralbanks"),
+
+    # ── economic (3) ──────────────────────────────────────────
+    FeedInfo("Economic Data", _gnews('(CPI+OR+inflation+OR+GDP+OR+"jobs+report"+OR+"nonfarm+payrolls"+OR+PMI)', "2d"), "economic"),
+    FeedInfo("Trade & Tariffs", _gnews('(tariff+OR+"trade+war"+OR+"trade+deficit"+OR+sanctions)', "2d"), "economic"),
+    FeedInfo("Housing Market", _gnews('("housing+market"+OR+"home+prices"+OR+"mortgage+rates"+OR+REIT)', "3d"), "economic"),
+
+    # ── ipo (3) ───────────────────────────────────────────────
+    FeedInfo("IPO News", _gnews('(IPO+OR+"initial+public+offering"+OR+SPAC+OR+"direct+listing")', "3d"), "ipo"),
+    FeedInfo("Earnings Reports", _gnews('("earnings+report"+OR+"quarterly+earnings"+OR+"revenue+beat"+OR+"earnings+miss")', "2d"), "ipo"),
+    FeedInfo("M&A News", _gnews('("merger"+OR+"acquisition"+OR+"takeover+bid"+OR+"buyout")+billion', "3d"), "ipo"),
+
+    # ── derivatives (2) ───────────────────────────────────────
+    FeedInfo("Options Market", _gnews('("options+market"+OR+"options+trading"+OR+"put+call+ratio"+OR+VIX)', "2d"), "derivatives"),
+    FeedInfo("Futures Trading", _gnews('("futures+trading"+OR+"S%26P+500+futures"+OR+"Nasdaq+futures")', "1d"), "derivatives"),
+
+    # ── fintech (3) ───────────────────────────────────────────
+    FeedInfo("Fintech News", _gnews('(fintech+OR+"payment+technology"+OR+"neobank"+OR+"digital+banking")', "3d"), "fintech"),
+    FeedInfo("Trading Tech", _gnews('("algorithmic+trading"+OR+"trading+platform"+OR+"quantitative+finance")', "7d"), "fintech"),
+    FeedInfo("Blockchain Finance", _gnews('("blockchain+finance"+OR+"tokenization"+OR+"digital+securities"+OR+CBDC)', "7d"), "fintech"),
+
+    # ── regulation (4) ────────────────────────────────────────
+    FeedInfo("SEC", "https://www.sec.gov/news/pressreleases.rss", "regulation"),
+    FeedInfo("Financial Regulation", _gnews("(SEC+OR+CFTC+OR+FINRA+OR+FCA)+regulation+OR+enforcement", "3d"), "regulation"),
+    FeedInfo("Banking Rules", _gnews('(Basel+OR+"capital+requirements"+OR+"banking+regulation")', "7d"), "regulation"),
+    FeedInfo("Crypto Regulation", _gnews('(crypto+regulation+OR+"digital+asset"+regulation+OR+"stablecoin"+regulation)', "7d"), "regulation"),
+
+    # ── institutional (3) ─────────────────────────────────────
+    FeedInfo("Hedge Fund News", _gnews('("hedge+fund"+OR+"Bridgewater"+OR+"Citadel"+OR+"Renaissance")', "7d"), "institutional"),
+    FeedInfo("Private Equity", _gnews('("private+equity"+OR+Blackstone+OR+KKR+OR+Apollo+OR+Carlyle)', "3d"), "institutional"),
+    FeedInfo("Sovereign Wealth", _gnews('("sovereign+wealth+fund"+OR+"pension+fund"+OR+"institutional+investor")', "7d"), "institutional"),
+
+    # ── analysis (3) ──────────────────────────────────────────
+    FeedInfo("Market Outlook", _gnews('("market+outlook"+OR+"stock+market+forecast"+OR+"bull+market"+OR+"bear+market")', "3d"), "analysis"),
+    FeedInfo("Risk & Volatility", _gnews('(VIX+OR+"market+volatility"+OR+"risk+off"+OR+"market+correction")', "3d"), "analysis"),
+    FeedInfo("Bank Research", _gnews('("Goldman+Sachs"+OR+"JPMorgan"+OR+"Morgan+Stanley")+forecast+OR+outlook', "3d"), "analysis"),
+
+    # ── thinktanks (5) ────────────────────────────────────────
+    FeedInfo("Foreign Policy", "https://foreignpolicy.com/feed/", "thinktanks"),
+    FeedInfo("Atlantic Council", "https://www.atlanticcouncil.org/feed/", "thinktanks"),
+    FeedInfo("AEI", "https://www.aei.org/feed/", "thinktanks"),
+    FeedInfo("CSIS", _gnews("site:csis.org", "7d"), "thinktanks"),
+    FeedInfo("War on the Rocks", "https://warontherocks.com/feed", "thinktanks"),
+
+    # ── government (2) ────────────────────────────────────────
+    FeedInfo("Federal Reserve (Gov)", "https://www.federalreserve.gov/feeds/press_all.xml", "government"),
+    FeedInfo("SEC (Gov)", "https://www.sec.gov/news/pressreleases.rss", "government"),
+]
+
+# ── Category index ────────────────────────────────────────────
+
+_BY_CATEGORY: dict[str, list[FeedInfo]] = {}
+_BY_NAME: dict[str, FeedInfo] = {}
+
+for _f in FEEDS:
+    _BY_CATEGORY.setdefault(_f.category, []).append(_f)
+    _BY_NAME[_f.name] = _f
+
+CATEGORIES = sorted(_BY_CATEGORY.keys())
+
+
+class Registry:
+    """Queryable registry of news feed definitions."""
+
+    def list_feeds(self, category: str | None = None) -> list[FeedInfo]:
+        if category:
+            return list(_BY_CATEGORY.get(category, []))
+        return list(FEEDS)
+
+    def get_feed(self, name: str) -> FeedInfo:
+        if name not in _BY_NAME:
+            raise KeyError(f"Unknown feed: {name}")
+        return _BY_NAME[name]
+
+    def list_categories(self) -> list[str]:
+        return list(CATEGORIES)
+
+    def feed_count(self) -> int:
+        return len(FEEDS)

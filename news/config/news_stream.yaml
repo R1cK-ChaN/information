@@ -1,0 +1,25 @@
+storage:
+  sqlite_path: "data/news.db"
+
+providers:
+  rss:
+    timeout_seconds: 15
+    max_items_per_feed: 10
+    enabled: true
+  summarizer:
+    api_key_env: "GROQ_API_KEY"
+    model: "llama-3.1-8b-instant"
+    max_tokens: 150
+
+retry:
+  max_retries: 3
+  base_delay_seconds: 2
+
+polling:
+  default_interval_minutes: 15
+  cooldown_minutes: 5
+  max_consecutive_failures: 3
+
+deduplicator:
+  similarity_threshold: 0.6
+  lookback_hours: 24
