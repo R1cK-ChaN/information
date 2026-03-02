@@ -29,17 +29,17 @@ FEEDS: list[FeedInfo] = [
 
     # ── forex (3) ─────────────────────────────────────────────
     FeedInfo("Forex News", _gnews('("forex"+OR+"currency"+OR+"FX+market")+trading', "1d"), "forex"),
-    FeedInfo("Dollar Watch", _gnews('("dollar+index"+OR+DXY+OR+"US+dollar"+OR+"euro+dollar")', "2d"), "forex"),
-    FeedInfo("Central Bank Rates", _gnews('("central+bank"+OR+"interest+rate"+OR+"rate+decision"+OR+"monetary+policy")', "2d"), "forex"),
+    FeedInfo("Dollar Watch", _gnews('("dollar+index"+OR+DXY+OR+"US+dollar"+forex+OR+"euro+dollar"+trading)', "2d"), "forex"),
+    FeedInfo("Central Bank Rates", _gnews('("central+bank"+rate+OR+"Fed+rate"+OR+"interest+rate+decision"+OR+"monetary+policy")+-crypto+-bitcoin', "2d"), "forex"),
 
     # ── bonds (3) ─────────────────────────────────────────────
-    FeedInfo("Bond Market", _gnews('("bond+market"+OR+"treasury+yields"+OR+"bond+yields"+OR+"fixed+income")', "2d"), "bonds"),
+    FeedInfo("Bond Market", _gnews('("bond+market"+OR+"treasury+yields"+OR+"bond+yields"+OR+"10-year+yield"+OR+"fixed+income")+-site:vietnambiz.vn+-site:vietstock.vn', "2d"), "bonds"),
     FeedInfo("Treasury Watch", _gnews('("US+Treasury"+OR+"Treasury+auction"+OR+"10-year+yield"+OR+"2-year+yield")', "2d"), "bonds"),
-    FeedInfo("Corporate Bonds", _gnews('("corporate+bond"+OR+"high+yield"+OR+"investment+grade"+OR+"credit+spread")', "3d"), "bonds"),
+    FeedInfo("Corporate Bonds", _gnews('("corporate+bond"+OR+"high+yield+bond"+OR+"high+yield+debt"+OR+"investment+grade+bond"+OR+"credit+spread")', "3d"), "bonds"),
 
     # ── commodities (4) ───────────────────────────────────────
     FeedInfo("Oil & Gas", _gnews("(oil+price+OR+OPEC+OR+%22natural+gas%22+OR+%22crude+oil%22+OR+WTI+OR+Brent)", "1d"), "commodities"),
-    FeedInfo("Gold & Metals", _gnews("(gold+price+OR+silver+price+OR+copper+OR+platinum+OR+%22precious+metals%22)", "2d"), "commodities"),
+    FeedInfo("Gold & Metals", _gnews('("gold+price"+OR+"silver+price"+OR+"copper+futures"+OR+"platinum+futures"+OR+"precious+metals")+-site:meyka.com', "2d"), "commodities"),
     FeedInfo("Agriculture", _gnews("(wheat+OR+corn+OR+soybeans+OR+coffee+OR+sugar)+price+OR+commodity", "3d"), "commodities"),
     FeedInfo("Commodity Trading", _gnews('("commodity+trading"+OR+"futures+market"+OR+CME+OR+NYMEX+OR+COMEX)', "2d"), "commodities"),
 
@@ -52,9 +52,9 @@ FEEDS: list[FeedInfo] = [
 
     # ── centralbanks (6) ──────────────────────────────────────
     FeedInfo("Federal Reserve", "https://www.federalreserve.gov/feeds/press_all.xml", "centralbanks"),
-    FeedInfo("ECB Watch", _gnews('("European+Central+Bank"+OR+ECB+OR+Lagarde)+monetary+policy', "3d"), "centralbanks"),
-    FeedInfo("BoJ Watch", _gnews('("Bank+of+Japan"+OR+BoJ)+monetary+policy', "3d"), "centralbanks"),
-    FeedInfo("BoE Watch", _gnews('("Bank+of+England"+OR+BoE)+monetary+policy', "3d"), "centralbanks"),
+    FeedInfo("ECB Watch", _gnews('("European+Central+Bank"+OR+ECB+OR+Lagarde)+(rate+OR+euro+OR+inflation+OR+"monetary+policy")+-crypto+-bitcoin', "3d"), "centralbanks"),
+    FeedInfo("BoJ Watch", _gnews('("Bank+of+Japan"+OR+BoJ)+(rate+OR+yen+OR+yield+OR+"monetary+policy")+-crypto+-bitcoin', "3d"), "centralbanks"),
+    FeedInfo("BoE Watch", _gnews('("Bank+of+England"+OR+BoE)+(rate+OR+sterling+OR+inflation+OR+"monetary+policy")+-crypto+-bitcoin', "3d"), "centralbanks"),
     FeedInfo("PBoC Watch", _gnews('("People%27s+Bank+of+China"+OR+PBoC+OR+PBOC)', "7d"), "centralbanks"),
     FeedInfo("Global Central Banks", _gnews('("rate+hike"+OR+"rate+cut"+OR+"interest+rate+decision")+central+bank', "3d"), "centralbanks"),
 
@@ -65,11 +65,11 @@ FEEDS: list[FeedInfo] = [
 
     # ── ipo (3) ───────────────────────────────────────────────
     FeedInfo("IPO News", _gnews('(IPO+OR+"initial+public+offering"+OR+SPAC+OR+"direct+listing")', "3d"), "ipo"),
-    FeedInfo("Earnings Reports", _gnews('("earnings+report"+OR+"quarterly+earnings"+OR+"revenue+beat"+OR+"earnings+miss")', "2d"), "ipo"),
+    FeedInfo("Earnings Reports", _gnews('("earnings+report"+OR+"quarterly+earnings"+OR+"earnings+beat"+OR+"earnings+surprise"+OR+"earnings+miss")+-site:defenseworld.net+-site:simplywall.st', "2d"), "ipo"),
     FeedInfo("M&A News", _gnews('("merger"+OR+"acquisition"+OR+"takeover+bid"+OR+"buyout")+billion', "3d"), "ipo"),
 
     # ── derivatives (2) ───────────────────────────────────────
-    FeedInfo("Options Market", _gnews('("options+market"+OR+"options+trading"+OR+"put+call+ratio"+OR+VIX)', "2d"), "derivatives"),
+    FeedInfo("Options Market", _gnews('(VIX+OR+"equity+options"+OR+"options+expiration"+OR+"options+market"+OR+"put+call+ratio")+-site:vietnambiz.vn', "2d"), "derivatives"),
     FeedInfo("Futures Trading", _gnews('("futures+trading"+OR+"S%26P+500+futures"+OR+"Nasdaq+futures")', "1d"), "derivatives"),
 
     # ── fintech (3) ───────────────────────────────────────────
@@ -80,17 +80,17 @@ FEEDS: list[FeedInfo] = [
     # ── regulation (4) ────────────────────────────────────────
     FeedInfo("SEC", "https://www.sec.gov/news/pressreleases.rss", "regulation"),
     FeedInfo("Financial Regulation", _gnews("(SEC+OR+CFTC+OR+FINRA+OR+FCA)+regulation+OR+enforcement", "3d"), "regulation"),
-    FeedInfo("Banking Rules", _gnews('(Basel+OR+"capital+requirements"+OR+"banking+regulation")', "7d"), "regulation"),
+    FeedInfo("Banking Rules", _gnews('("Basel+III"+OR+"Basel+IV"+OR+"Basel+regulation"+OR+"Basel+accord"+OR+"capital+requirements"+bank+OR+"banking+regulation")', "7d"), "regulation"),
     FeedInfo("Crypto Regulation", _gnews('(crypto+regulation+OR+"digital+asset"+regulation+OR+"stablecoin"+regulation)', "7d"), "regulation"),
 
     # ── institutional (3) ─────────────────────────────────────
-    FeedInfo("Hedge Fund News", _gnews('("hedge+fund"+OR+"Bridgewater"+OR+"Citadel"+OR+"Renaissance")', "7d"), "institutional"),
+    FeedInfo("Hedge Fund News", _gnews('("hedge+fund"+OR+"Bridgewater+Associates"+OR+"Citadel+LLC"+OR+"Renaissance+Technologies"+OR+"Two+Sigma"+OR+"DE+Shaw")', "7d"), "institutional"),
     FeedInfo("Private Equity", _gnews('("private+equity"+OR+Blackstone+OR+KKR+OR+Apollo+OR+Carlyle)', "3d"), "institutional"),
     FeedInfo("Sovereign Wealth", _gnews('("sovereign+wealth+fund"+OR+"pension+fund"+OR+"institutional+investor")', "7d"), "institutional"),
 
     # ── analysis (3) ──────────────────────────────────────────
-    FeedInfo("Market Outlook", _gnews('("market+outlook"+OR+"stock+market+forecast"+OR+"bull+market"+OR+"bear+market")', "3d"), "analysis"),
-    FeedInfo("Risk & Volatility", _gnews('(VIX+OR+"market+volatility"+OR+"risk+off"+OR+"market+correction")', "3d"), "analysis"),
+    FeedInfo("Market Outlook", _gnews('("stock+market+outlook"+OR+"Wall+Street+outlook"+OR+"stock+market+forecast"+OR+"bull+market"+OR+"bear+market")+-site:openpr.com', "3d"), "analysis"),
+    FeedInfo("Risk & Volatility", _gnews('("S%26P+500"+volatility+OR+VIX+OR+CBOE+OR+"risk+off"+stocks+OR+"market+correction")+-site:marketsmojo.com', "3d"), "analysis"),
     FeedInfo("Bank Research", _gnews('("Goldman+Sachs"+OR+"JPMorgan"+OR+"Morgan+Stanley")+forecast+OR+outlook', "3d"), "analysis"),
 
     # ── thinktanks (5) ────────────────────────────────────────
