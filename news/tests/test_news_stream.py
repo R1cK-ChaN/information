@@ -90,7 +90,7 @@ class TestDescribe:
 
     def test_list_feeds(self, ns):
         feeds = ns.list_feeds("markets")
-        assert len(feeds) == 7
+        assert len(feeds) == 10
         assert all(f["category"] == "markets" for f in feeds)
 
     def test_list_all_feeds(self, ns):

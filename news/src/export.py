@@ -82,6 +82,9 @@ def _compose_markdown(item: dict) -> str:
         f"**Impact:** {item.get('impact_level', 'info')} (confidence: {item.get('confidence', 0.3)})",
         f"**Link:** {item['link']}",
     ]
+    description = item.get("description")
+    if description:
+        lines += ["", "---", "", description]
     summary = item.get("summary")
     if summary:
         lines += ["", "## Summary", "", summary]

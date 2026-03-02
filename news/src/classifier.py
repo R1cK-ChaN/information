@@ -187,14 +187,13 @@ def _match_keywords(title_lower: str, keywords: dict[str, str]) -> tuple[str, st
     return None
 
 
-def classify(title: str) -> Classification:
-    """Classify a headline by financial impact and category.
+def _classify_text(text: str) -> Classification | None:
+    """Run keyword tiers against a single text block.
 
-    Returns Classification with impact_level, finance_category, confidence.
+    Returns Classification if any keyword matches, else None.
     """
-    lower = title.lower()
+    lower = text.lower()
 
-    # Check exclusions
     if any(ex in lower for ex in _EXCLUSIONS):
         return Classification("info", "general", 0.3)
 
@@ -213,5 +212,23 @@ def classify(title: str) -> Classification:
     match = _match_keywords(lower, LOW_KEYWORDS)
     if match:
         return Classification("low", match[1], 0.6)
+
+    return None
+
+
+def classify(title: str, description: str = "") -> Classification:
+    """Classify a news item by financial impact and category.
+
+    Matches keywords against the title first; if no match is found
+    and a description is provided, also checks the description.
+    """
+    result = _classify_text(title)
+    if result:
+        return result
+
+    if description:
+        result = _classify_text(description)
+        if result:
+            return result
 
     return Classification("info", "general", 0.3)

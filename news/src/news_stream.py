@@ -226,7 +226,7 @@ class NewsStream:
         """Process items using keyword classifier (fallback path)."""
         stored = 0
         for feed, item in items:
-            cls = classify(item["title"])
+            cls = classify(item["title"], item.get("description", ""))
             item["impact_level"] = cls.impact_level
             item["finance_category"] = cls.finance_category
             item["confidence"] = cls.confidence
@@ -258,7 +258,7 @@ class NewsStream:
                     "LLM extraction failed for '%s', falling back to keyword: %s",
                     item["title"], e,
                 )
-                cls = classify(item["title"])
+                cls = classify(item["title"], item.get("description", ""))
                 item["impact_level"] = cls.impact_level
                 item["finance_category"] = cls.finance_category
                 item["confidence"] = cls.confidence

@@ -88,10 +88,19 @@ class RSSProvider(BaseProvider):
             if not link or not title:
                 continue
 
+            # Extract description/summary from feed entry.
+            # Prefer content:encoded (richer), fall back to summary/description.
+            description = ""
+            if entry.get("content"):
+                description = entry["content"][0].get("value", "").strip()
+            if not description:
+                description = (entry.get("summary") or "").strip()
+
             items.append({
                 "item_id": _make_item_id(link),
                 "source": feed_name or feed.feed.get("title", "Unknown"),
                 "title": title,
+                "description": description,
                 "link": link,
                 "published": _parse_date(entry),
                 "fetched_at": now,
