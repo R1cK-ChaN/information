@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import re
 from dataclasses import dataclass
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 import httpx
 from readability import Document
@@ -16,6 +18,16 @@ _USER_AGENT = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 )
+
+_GNEWS_SIG_RE = re.compile(r'data-n-a-sg="([^"]+)"')
+_GNEWS_TS_RE = re.compile(r'data-n-a-ts="([^"]+)"')
+
+_BATCHEXECUTE_URL = (
+    "https://news.google.com/_/DotsSplashUi/data/batchexecute"
+)
+_BATCHEXECUTE_HEADERS = {
+    "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+}
 
 
 @dataclass
@@ -42,27 +54,91 @@ class ArticleFetcher:
             headers={"User-Agent": _USER_AGENT},
         )
 
+    # ── Google News URL resolution ────────────────────────────
+
     @staticmethod
     def _is_google_news_url(url: str) -> bool:
-        """Google News proxy URLs use JS redirects that can't be resolved."""
         try:
             return urlparse(url).hostname == "news.google.com"
         except Exception:
             return False
 
+    def _resolve_google_news_url(self, url: str) -> str | None:
+        """Resolve a Google News proxy URL to the real article URL.
+
+        Steps:
+        1. Fetch the Google News article page to get signature + timestamp.
+        2. POST to batchexecute API with those params to decode the URL.
+
+        Returns the decoded URL on success, or None on any failure.
+        """
+        try:
+            path = urlparse(url).path.split("/")
+            base64_str = path[-1]
+
+            # Fetch article page to get per-article sig/ts
+            page_url = (
+                f"https://news.google.com/articles/{base64_str}"
+                "?hl=en-US&gl=US&ceid=US:en"
+            )
+            resp = self._client.get(page_url)
+            if resp.status_code != 200:
+                return None
+
+            sig_m = _GNEWS_SIG_RE.search(resp.text)
+            ts_m = _GNEWS_TS_RE.search(resp.text)
+            if not sig_m or not ts_m:
+                return None
+
+            sig, ts = sig_m.group(1), ts_m.group(1)
+
+            # Call batchexecute to decode
+            payload = [
+                "Fbv4je",
+                (
+                    '["garturlreq",[["X","X",["X","X"],'
+                    'null,null,1,1,"US:en",null,1,null,null,'
+                    'null,null,null,0,1],"X","X",1,[1,1,1],'
+                    f'1,1,null,0,0,null,0],"{base64_str}",{ts},"{sig}"]'
+                ),
+            ]
+            body = f"f.req={quote(json.dumps([[payload]]))}"
+            resp2 = self._client.post(
+                _BATCHEXECUTE_URL,
+                headers=_BATCHEXECUTE_HEADERS,
+                data=body,
+            )
+            if resp2.status_code != 200 or "garturlres" not in resp2.text:
+                return None
+
+            parts = resp2.text.split("\n\n")
+            parsed = json.loads(parts[1])[:-2]
+            decoded_url = json.loads(parsed[0][2])[1]
+            return decoded_url
+
+        except Exception as exc:
+            logger.debug("Google News URL resolve failed for %s: %s", url, exc)
+            return None
+
+    # ── Core fetch ────────────────────────────────────────────
+
     def fetch_article(self, url: str, rss_description: str) -> ArticleContent:
         """Fetch full article content from *url*.
 
+        For Google News proxy URLs, resolves the real article URL first.
         Returns extracted markdown on success, or *rss_description* as
         fallback on any error — never loses content.
         """
         if self._is_google_news_url(url):
-            return ArticleContent(
-                content=rss_description,
-                fetched=False,
-                content_length=len(rss_description),
-                error="skipped: Google News proxy URL",
-            )
+            real_url = self._resolve_google_news_url(url)
+            if not real_url:
+                return ArticleContent(
+                    content=rss_description,
+                    fetched=False,
+                    content_length=len(rss_description),
+                    error="Google News URL resolution failed",
+                )
+            url = real_url
 
         try:
             resp = self._client.get(url)
