@@ -7,6 +7,9 @@ providers:
     timeout_seconds: 15
     max_items_per_feed: 10
     enabled: true
+  article_fetcher:
+    timeout_seconds: 20
+    max_content_chars: 15000
   summarizer:
     api_key_env: "GROQ_API_KEY"
     model: "llama-3.1-8b-instant"

@@ -17,6 +17,7 @@ from .classifier import classify
 from .deduplicator import Deduplicator
 from .providers.rss import RSSProvider
 from .providers.summarizer import Summarizer
+from .article_fetcher import ArticleFetcher
 from .export import (
     convert_item, convert_item_llm, save_extraction,
     _news_sha256, _compose_markdown,
@@ -84,6 +85,13 @@ class NewsStream:
         self.summarizer = Summarizer(
             model=sum_cfg.get("model", "llama-3.1-8b-instant"),
             max_tokens=sum_cfg.get("max_tokens", 150),
+        )
+
+        # Article fetcher (full-content extraction)
+        af_cfg = self.config["providers"].get("article_fetcher", {})
+        self.article_fetcher = ArticleFetcher(
+            timeout=af_cfg.get("timeout_seconds", 20),
+            max_content_chars=af_cfg.get("max_content_chars", 15_000),
         )
 
         # Dedup config
@@ -208,6 +216,22 @@ class NewsStream:
                 logger.warning("Failed to fetch %s: %s", feed.name, e)
 
             time.sleep(0.3)  # rate limit courtesy
+
+        # Phase 1.5: Fetch full article content for each pending item
+        fetched_count = 0
+        for _feed, item in pending_items:
+            rss_desc = item.get("description", "")
+            result = self.article_fetcher.fetch_article(item["link"], rss_desc)
+            if result.fetched:
+                item["description"] = result.content
+                fetched_count += 1
+            time.sleep(0.5)
+
+        if fetched_count:
+            logger.info(
+                "Article fetcher: enriched %d / %d items",
+                fetched_count, len(pending_items),
+            )
 
         # Phase 2: Process collected items
         if self._llm_settings:
@@ -402,6 +426,7 @@ class NewsStream:
     def close(self):
         """Close all connections."""
         self.rss.close()
+        self.article_fetcher.close()
         self.summarizer.close()
         self.sync_store.close()
         self.catalog.close()

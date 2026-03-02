@@ -8,6 +8,8 @@ dependencies = [
     "pyyaml>=6.0",
     "python-dotenv>=1.0",
     "pydantic-settings>=2.0",
+    "readability-lxml>=0.8",
+    "markdownify>=0.12",
 ]
 
 [project.optional-dependencies]
