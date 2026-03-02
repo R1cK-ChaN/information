@@ -32,7 +32,7 @@ class TestRegistry:
 
     def test_list_feeds_by_category(self, registry):
         markets = registry.list_feeds("markets")
-        assert len(markets) == 7
+        assert len(markets) == 10
         assert all(f.category == "markets" for f in markets)
 
     def test_list_feeds_all(self, registry):

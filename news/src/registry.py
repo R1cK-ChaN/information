@@ -18,7 +18,7 @@ def _gnews(query: str, when: str = "1d") -> str:
 # ── Feed definitions ──────────────────────────────────────────
 
 FEEDS: list[FeedInfo] = [
-    # ── markets (7) ───────────────────────────────────────────
+    # ── markets (10) ──────────────────────────────────────────
     FeedInfo("CNBC", "https://www.cnbc.com/id/100003114/device/rss/rss.html", "markets"),
     FeedInfo("MarketWatch", _gnews("site:marketwatch.com+markets", "1d"), "markets"),
     FeedInfo("Yahoo Finance", "https://finance.yahoo.com/rss/topstories", "markets"),
@@ -26,6 +26,9 @@ FEEDS: list[FeedInfo] = [
     FeedInfo("Reuters Markets", _gnews("site:reuters.com+markets+stocks", "1d"), "markets"),
     FeedInfo("Bloomberg Markets", _gnews("site:bloomberg.com+markets", "1d"), "markets"),
     FeedInfo("Investing.com News", _gnews("site:investing.com+markets", "1d"), "markets"),
+    FeedInfo("WSJ Markets", "https://feeds.content.dowjones.io/public/rss/RSSMarketsMain", "markets"),
+    FeedInfo("BBC Business", "https://feeds.bbci.co.uk/news/business/rss.xml", "markets"),
+    FeedInfo("Nikkei Asia", "https://asia.nikkei.com/rss/feed/nar", "markets"),
 
     # ── forex (3) ─────────────────────────────────────────────
     FeedInfo("Forex News", _gnews('("forex"+OR+"currency"+OR+"FX+market")+trading', "1d"), "forex"),
@@ -50,15 +53,19 @@ FEEDS: list[FeedInfo] = [
     FeedInfo("Crypto News", _gnews('(bitcoin+OR+ethereum+OR+crypto+OR+"digital+assets")', "1d"), "crypto"),
     FeedInfo("DeFi News", _gnews('(DeFi+OR+"decentralized+finance"+OR+DEX+OR+"yield+farming")', "3d"), "crypto"),
 
-    # ── centralbanks (6) ──────────────────────────────────────
+    # ── centralbanks (8) ──────────────────────────────────────
     FeedInfo("Federal Reserve", "https://www.federalreserve.gov/feeds/press_all.xml", "centralbanks"),
+    FeedInfo("ECB Press", "https://www.ecb.europa.eu/rss/press.html", "centralbanks"),
     FeedInfo("ECB Watch", _gnews('("European+Central+Bank"+OR+ECB+OR+Lagarde)+(rate+OR+euro+OR+inflation+OR+"monetary+policy")+-crypto+-bitcoin', "3d"), "centralbanks"),
+    FeedInfo("BoE Official", "https://www.bankofengland.co.uk/rss/news", "centralbanks"),
     FeedInfo("BoJ Watch", _gnews('("Bank+of+Japan"+OR+BoJ)+(rate+OR+yen+OR+yield+OR+"monetary+policy")+-crypto+-bitcoin', "3d"), "centralbanks"),
     FeedInfo("BoE Watch", _gnews('("Bank+of+England"+OR+BoE)+(rate+OR+sterling+OR+inflation+OR+"monetary+policy")+-crypto+-bitcoin', "3d"), "centralbanks"),
     FeedInfo("PBoC Watch", _gnews('("People%27s+Bank+of+China"+OR+PBoC+OR+PBOC)', "7d"), "centralbanks"),
     FeedInfo("Global Central Banks", _gnews('("rate+hike"+OR+"rate+cut"+OR+"interest+rate+decision")+central+bank', "3d"), "centralbanks"),
 
-    # ── economic (3) ──────────────────────────────────────────
+    # ── economic (5) ──────────────────────────────────────────
+    FeedInfo("WSJ Economy", "https://feeds.content.dowjones.io/public/rss/socialeconomyfeed", "economic"),
+    FeedInfo("IMF News", "https://www.imf.org/en/news/rss", "economic"),
     FeedInfo("Economic Data", _gnews('(CPI+OR+inflation+OR+GDP+OR+"jobs+report"+OR+"nonfarm+payrolls"+OR+PMI)', "2d"), "economic"),
     FeedInfo("Trade & Tariffs", _gnews('(tariff+OR+"trade+war"+OR+"trade+deficit"+OR+sanctions)', "2d"), "economic"),
     FeedInfo("Housing Market", _gnews('("housing+market"+OR+"home+prices"+OR+"mortgage+rates"+OR+REIT)', "3d"), "economic"),
@@ -77,8 +84,9 @@ FEEDS: list[FeedInfo] = [
     FeedInfo("Trading Tech", _gnews('("algorithmic+trading"+OR+"trading+platform"+OR+"quantitative+finance")', "7d"), "fintech"),
     FeedInfo("Blockchain Finance", _gnews('("blockchain+finance"+OR+"tokenization"+OR+"digital+securities"+OR+CBDC)', "7d"), "fintech"),
 
-    # ── regulation (4) ────────────────────────────────────────
+    # ── regulation (5) ────────────────────────────────────────
     FeedInfo("SEC", "https://www.sec.gov/news/pressreleases.rss", "regulation"),
+    FeedInfo("BIS", "https://www.bis.org/doclist/all_pressrels.rss", "regulation"),
     FeedInfo("Financial Regulation", _gnews("(SEC+OR+CFTC+OR+FINRA+OR+FCA)+regulation+OR+enforcement", "3d"), "regulation"),
     FeedInfo("Banking Rules", _gnews('("Basel+III"+OR+"Basel+IV"+OR+"Basel+regulation"+OR+"Basel+accord"+OR+"capital+requirements"+bank+OR+"banking+regulation")', "7d"), "regulation"),
     FeedInfo("Crypto Regulation", _gnews('(crypto+regulation+OR+"digital+asset"+regulation+OR+"stablecoin"+regulation)', "7d"), "regulation"),
@@ -88,7 +96,8 @@ FEEDS: list[FeedInfo] = [
     FeedInfo("Private Equity", _gnews('("private+equity"+OR+Blackstone+OR+KKR+OR+Apollo+OR+Carlyle)', "3d"), "institutional"),
     FeedInfo("Sovereign Wealth", _gnews('("sovereign+wealth+fund"+OR+"pension+fund"+OR+"institutional+investor")', "7d"), "institutional"),
 
-    # ── analysis (3) ──────────────────────────────────────────
+    # ── analysis (4) ──────────────────────────────────────────
+    FeedInfo("NBER Working Papers", "https://www.nber.org/rss/new.xml", "analysis"),
     FeedInfo("Market Outlook", _gnews('("stock+market+outlook"+OR+"Wall+Street+outlook"+OR+"stock+market+forecast"+OR+"bull+market"+OR+"bear+market")+-site:openpr.com', "3d"), "analysis"),
     FeedInfo("Risk & Volatility", _gnews('("S%26P+500"+volatility+OR+VIX+OR+CBOE+OR+"risk+off"+stocks+OR+"market+correction")+-site:marketsmojo.com', "3d"), "analysis"),
     FeedInfo("Bank Research", _gnews('("Goldman+Sachs"+OR+"JPMorgan"+OR+"Morgan+Stanley")+forecast+OR+outlook', "3d"), "analysis"),
