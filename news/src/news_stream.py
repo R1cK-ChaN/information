@@ -89,9 +89,35 @@ class NewsStream:
 
         # Article fetcher (full-content extraction)
         af_cfg = self.config["providers"].get("article_fetcher", {})
+
+        # Paywall fetcher (optional — requires playwright)
+        paywall_fetcher = None
+        pw_cfg = self.config["providers"].get("paywall_fetcher", {})
+        pw_domains = pw_cfg.get("domains", [])
+        if pw_domains:
+            try:
+                from .paywall_fetcher import PaywallFetcher
+                browser_dir = _PROJECT_ROOT / pw_cfg.get(
+                    "browser_data_dir", "data/browser_profile",
+                )
+                paywall_fetcher = PaywallFetcher(
+                    paywall_domains=pw_domains,
+                    browser_data_dir=browser_dir,
+                    timeout_ms=pw_cfg.get("timeout_ms", 30_000),
+                    max_content_chars=af_cfg.get("max_content_chars", 15_000),
+                )
+                logger.info(
+                    "Paywall fetcher enabled for %d domains", len(pw_domains),
+                )
+            except ImportError:
+                logger.warning(
+                    "paywall_fetcher configured but playwright not installed; "
+                    "install with: pip install -e '.[playwright]'"
+                )
         self.article_fetcher = ArticleFetcher(
             timeout=af_cfg.get("timeout_seconds", 20),
             max_content_chars=af_cfg.get("max_content_chars", 15_000),
+            paywall_fetcher=paywall_fetcher,
         )
 
         # Dedup config

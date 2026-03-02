@@ -14,6 +14,18 @@ pip install -e ".[dev]"
 
 Optional: create `.env` with `GROQ_API_KEY=xxx` for LLM headline summarization, `LLM_API_KEY` for structured extraction.
 
+### Paywall fetcher (optional)
+
+For full article content from paywalled sites (Bloomberg, Reuters, WSJ, Economist, etc.):
+
+```bash
+pip install -e ".[playwright]"
+python -m playwright install chromium
+python -m src.paywall_login https://www.bloomberg.com   # log in, close browser to save session
+```
+
+Re-run the login command if a session expires. See [Paywall Fetcher](#paywall-fetcher) below.
+
 ## Quick Start
 
 ```python
@@ -48,7 +60,7 @@ ns.summarize_latest(n=10)
 ns.close()
 ```
 
-## Feed Categories (77 feeds, 16 categories)
+## Feed Categories (88 feeds, 18 categories)
 
 | Category | Feeds | Key Sources |
 |----------|-------|-------------|
@@ -68,8 +80,10 @@ ns.close()
 | china | 12 | SCMP, Xinhua, China Daily, CGTN, China Trade/Markets/Tech/Policy |
 | thinktanks | 5 | Foreign Policy, Atlantic Council, AEI, CSIS, War on the Rocks |
 | government | 2 | Federal Reserve, SEC (official RSS) |
+| wireservices | 4 | AP News, France24/AFP World, Asia-Pacific, Business |
+| global | 7 | BBC World, BBC Asia, CNA Asia, CNA Business, Economist Leaders, Economist Finance, Forbes Business |
 
-Direct RSS where available (Fed, ECB, BoE, SEC, BIS, IMF, WSJ, BBC, Nikkei, SCMP, Xinhua, China Daily, CGTN, CoinDesk, Cointelegraph, think tanks). Google News search proxy for the rest.
+Direct RSS where available (Fed, ECB, BoE, SEC, BIS, IMF, WSJ, BBC, Nikkei, SCMP, Xinhua, China Daily, CGTN, CoinDesk, Cointelegraph, France24, CNA, Economist, Forbes, think tanks). Google News search proxy for the rest.
 
 ## Classifier
 
@@ -109,6 +123,26 @@ Phase 2:   classify / LLM extract → save JSON
 - Graceful fallback to RSS description on any error (timeout, 403, parse failure) — never loses content
 - Direct feeds (Fed, ECB, BoE, BIS) typically yield 800–15,000 chars; Google News proxy articles yield 1,000–6,000 chars after resolution
 
+## Paywall Fetcher
+
+Sites that return 403/401 to plain HTTP clients (bot protection, login walls) are routed through a headless Chromium browser with a persistent cookie profile:
+
+```
+ArticleFetcher.fetch_article(url)
+  ├── resolve Google News proxy URL (httpx, unchanged)
+  ├── domain in paywall_domains? → PaywallFetcher (Playwright headless Chromium)
+  └── otherwise → httpx fetch (unchanged)
+  └── on ANY failure → rss_description fallback
+```
+
+Configured domains (`config/news_stream.yaml` → `providers.paywall_fetcher.domains`):
+bloomberg.com, reuters.com, barrons.com, nytimes.com, wsj.com, fxstreet.com, theblock.co, france24.com, economist.com, forbes.com
+
+- Browser is lazily started on first paywall URL and stays alive for the refresh cycle
+- Playwright is conditionally imported — never loaded if no paywall domains configured or package not installed
+- Login sessions are saved in `data/browser_profile/` (git-ignored)
+- One-time login: `python -m src.paywall_login <url>` opens a visible browser for manual login
+
 ## SQLite Schema
 
 Three tables:
@@ -119,7 +153,7 @@ Three tables:
 
 ## Config
 
-`config/news_stream.yaml` — SQLite path, RSS timeout, max items per feed, article fetcher timeout/max chars, dedup threshold, polling intervals, Groq model settings.
+`config/news_stream.yaml` — SQLite path, RSS timeout, max items per feed, article fetcher timeout/max chars, paywall fetcher domains/browser profile/timeout, dedup threshold, polling intervals, Groq model settings.
 
 ## Tests
 

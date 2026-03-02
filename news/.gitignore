@@ -7,3 +7,4 @@ build/
 *.db
 .env
 .pytest_cache/
+data/browser_profile/

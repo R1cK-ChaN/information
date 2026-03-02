@@ -126,6 +126,21 @@ FEEDS: list[FeedInfo] = [
     # ── government (2) ────────────────────────────────────────
     FeedInfo("Federal Reserve (Gov)", "https://www.federalreserve.gov/feeds/press_all.xml", "government"),
     FeedInfo("SEC (Gov)", "https://www.sec.gov/news/pressreleases.rss", "government"),
+
+    # ── wireservices (4) ────────────────────────────────────
+    FeedInfo("AP News", _gnews("source:associated_press", "1d"), "wireservices"),
+    FeedInfo("France24 World", "https://www.france24.com/en/rss", "wireservices"),
+    FeedInfo("France24 Asia-Pacific", "https://www.france24.com/en/asia-pacific/rss", "wireservices"),
+    FeedInfo("France24 Business", "https://www.france24.com/en/business/rss", "wireservices"),
+
+    # ── global (7) ──────────────────────────────────────────
+    FeedInfo("BBC World", "https://feeds.bbci.co.uk/news/world/rss.xml", "global"),
+    FeedInfo("BBC Asia", "https://feeds.bbci.co.uk/news/world/asia/rss.xml", "global"),
+    FeedInfo("CNA Asia", "https://www.channelnewsasia.com/api/v1/rss-outbound-feed?_format=xml&category=6511", "global"),
+    FeedInfo("CNA Business", "https://www.channelnewsasia.com/api/v1/rss-outbound-feed?_format=xml&category=6936", "global"),
+    FeedInfo("Economist Leaders", "https://www.economist.com/leaders/rss.xml", "global"),
+    FeedInfo("Economist Finance", "https://www.economist.com/finance-and-economics/rss.xml", "global"),
+    FeedInfo("Forbes Business", "https://www.forbes.com/business/feed", "global"),
 ]
 
 # ── Category index ────────────────────────────────────────────

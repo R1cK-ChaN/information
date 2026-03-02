@@ -10,6 +10,20 @@ providers:
   article_fetcher:
     timeout_seconds: 20
     max_content_chars: 15000
+  paywall_fetcher:
+    domains:
+      - bloomberg.com
+      - reuters.com
+      - barrons.com
+      - nytimes.com
+      - wsj.com
+      - fxstreet.com
+      - theblock.co
+      - france24.com
+      - economist.com
+      - forbes.com
+    browser_data_dir: "data/browser_profile"
+    timeout_ms: 30000
   summarizer:
     api_key_env: "GROQ_API_KEY"
     model: "llama-3.1-8b-instant"

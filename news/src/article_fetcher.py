@@ -45,9 +45,11 @@ class ArticleFetcher:
         self,
         timeout: int = 20,
         max_content_chars: int = 15_000,
+        paywall_fetcher=None,
     ):
         self._timeout = timeout
         self._max_content_chars = max_content_chars
+        self._paywall_fetcher = paywall_fetcher
         self._client = httpx.Client(
             timeout=timeout,
             follow_redirects=True,
@@ -140,6 +142,10 @@ class ArticleFetcher:
                 )
             url = real_url
 
+        # Route paywall-protected domains through Playwright
+        if self._paywall_fetcher and self._paywall_fetcher.needs_paywall_fetch(url):
+            return self._paywall_fetcher.fetch_article(url, rss_description)
+
         try:
             resp = self._client.get(url)
             resp.raise_for_status()
@@ -176,3 +182,5 @@ class ArticleFetcher:
 
     def close(self):
         self._client.close()
+        if self._paywall_fetcher:
+            self._paywall_fetcher.close()
