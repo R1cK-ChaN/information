@@ -1,6 +1,6 @@
 # NewsStream
 
-Macro-finance news ingestion and querying module. Fetches free RSS feeds, classifies headlines by financial impact, deduplicates, and persists everything into SQLite for historical time-series analysis.
+Macro-finance news ingestion and querying module. Fetches free RSS feeds, fetches full article content from source URLs, classifies headlines by financial impact, deduplicates, and persists everything into SQLite for historical time-series analysis.
 
 Companion to `macro_data_layer` — same patterns (single class, YAML config, SQLite backend).
 
@@ -12,7 +12,7 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-Optional: create `.env` with `GROQ_API_KEY=xxx` for LLM headline summarization.
+Optional: create `.env` with `GROQ_API_KEY=xxx` for LLM headline summarization, `LLM_API_KEY` for structured extraction.
 
 ## Quick Start
 
@@ -48,27 +48,28 @@ ns.summarize_latest(n=10)
 ns.close()
 ```
 
-## Feed Categories (56 feeds, 15 categories)
+## Feed Categories (77 feeds, 16 categories)
 
 | Category | Feeds | Key Sources |
 |----------|-------|-------------|
-| markets | 7 | CNBC, MarketWatch, Yahoo Finance, Seeking Alpha, Reuters, Bloomberg, Investing.com |
+| markets | 10 | CNBC, MarketWatch, Yahoo Finance, Seeking Alpha, Reuters, Bloomberg, Investing.com, WSJ, BBC, Nikkei |
 | forex | 3 | Forex News, Dollar/DXY Watch, Central Bank Rates |
 | bonds | 3 | Bond Market, Treasury Watch, Corporate Bonds |
 | commodities | 4 | Oil & Gas, Gold & Metals, Agriculture, Commodity Trading |
 | crypto | 5 | CoinDesk, Cointelegraph, The Block, Crypto News, DeFi |
-| centralbanks | 6 | Federal Reserve, ECB, BoJ, BoE, PBoC, Global CB |
-| economic | 3 | CPI/GDP/NFP Data, Trade & Tariffs, Housing |
+| centralbanks | 8 | Federal Reserve, ECB Press, ECB Watch, BoE Official, BoJ, BoE, PBoC, Global CB |
+| economic | 5 | WSJ Economy, IMF, Economic Data, Trade & Tariffs, Housing |
 | ipo | 3 | IPO News, Earnings Reports, M&A |
 | derivatives | 2 | Options Market, Futures Trading |
 | fintech | 3 | Fintech, Trading Tech, Blockchain Finance |
-| regulation | 4 | SEC, Financial Regulation, Banking Rules, Crypto Reg |
+| regulation | 5 | SEC, BIS, Financial Regulation, Banking Rules, Crypto Reg |
 | institutional | 3 | Hedge Funds, Private Equity, Sovereign Wealth |
-| analysis | 3 | Market Outlook, Risk & Volatility, Bank Research |
+| analysis | 4 | NBER, Market Outlook, Risk & Volatility, Bank Research |
+| china | 12 | SCMP, Xinhua, China Daily, CGTN, China Trade/Markets/Tech/Policy |
 | thinktanks | 5 | Foreign Policy, Atlantic Council, AEI, CSIS, War on the Rocks |
 | government | 2 | Federal Reserve, SEC (official RSS) |
 
-Direct RSS where available (Fed, SEC, CoinDesk, Cointelegraph, think tanks). Google News search proxy for the rest.
+Direct RSS where available (Fed, ECB, BoE, SEC, BIS, IMF, WSJ, BBC, Nikkei, SCMP, Xinhua, China Daily, CGTN, CoinDesk, Cointelegraph, think tanks). Google News search proxy for the rest.
 
 ## Classifier
 
@@ -92,6 +93,22 @@ Jaccard word-overlap similarity (ported from worldmonitor):
 - Threshold: 0.6 (configurable)
 - Seeded from last 24h of stored titles on each refresh
 
+## Article Fetcher
+
+After RSS fetch and dedup, the pipeline fetches full article HTML from each item's `link` URL and replaces the thin RSS description with extracted content:
+
+```
+Phase 1:   RSS fetch → dedup → pending_items[]
+Phase 1.5: For each item: resolve URL → fetch article → readability + markdownify → enrich item["description"]
+Phase 2:   classify / LLM extract → save JSON
+```
+
+- Uses `readability-lxml` to extract readable content and `markdownify` to convert to markdown
+- Truncates at 15,000 chars (configurable via `providers.article_fetcher.max_content_chars`)
+- **Google News proxy URLs** (`news.google.com/rss/articles/CBMi...`) are resolved to real article URLs via Google's batchexecute API (fetches article page for per-article signature/timestamp, then decodes)
+- Graceful fallback to RSS description on any error (timeout, 403, parse failure) — never loses content
+- Direct feeds (Fed, ECB, BoE, BIS) typically yield 800–15,000 chars; Google News proxy articles yield 1,000–6,000 chars after resolution
+
 ## SQLite Schema
 
 Three tables:
@@ -102,7 +119,7 @@ Three tables:
 
 ## Config
 
-`config/news_stream.yaml` — SQLite path, RSS timeout, max items per feed, dedup threshold, polling intervals, Groq model settings.
+`config/news_stream.yaml` — SQLite path, RSS timeout, max items per feed, article fetcher timeout/max chars, dedup threshold, polling intervals, Groq model settings.
 
 ## Tests
 
