@@ -10,9 +10,9 @@ build/
 # Environment
 .env
 
-# Data (local runtime artifacts)
+# Data (local runtime artifacts — ignore nested data/ dirs, keep top-level data/)
 */data/
-!data/
+**/*/data/
 
 # Unified output (JSON + catalog.db)
 output/
