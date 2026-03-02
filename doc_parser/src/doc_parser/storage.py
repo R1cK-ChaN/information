@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from widgets.catalog import Catalog
 
 
 def result_path(extraction_path: Path, sha: str) -> Path:
@@ -31,6 +35,11 @@ def load_result(extraction_path: Path, sha: str) -> dict | None:
 def has_result(extraction_path: Path, sha: str) -> bool:
     """Check whether a result JSON exists."""
     return result_path(extraction_path, sha).exists()
+
+
+def save_to_catalog(catalog: Catalog, result: dict, json_path: Path) -> None:
+    """Insert a result into the shared catalog after JSON write."""
+    catalog.insert(result, json_path)
 
 
 def list_results(extraction_path: Path) -> list[dict]:

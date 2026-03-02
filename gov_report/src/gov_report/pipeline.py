@@ -10,13 +10,14 @@ import time
 from pathlib import Path
 
 from doc_parser.steps.step3_extract import parse_date_to_epoch, run_extraction
-from doc_parser.storage import has_result, save_result
+from doc_parser.storage import has_result, save_result, save_to_catalog
 
 from gov_report.config import Settings
 from gov_report.converter import html_to_markdown
 from gov_report.hasher import content_sha
 from gov_report.models import FetchResult
 from gov_report.sync_store import SyncStore
+from widgets.catalog import Catalog
 
 logger = logging.getLogger(__name__)
 
@@ -26,14 +27,15 @@ async def process_report(
     fetch_result: FetchResult,
     *,
     force: bool = False,
+    catalog: Catalog | None = None,
 ) -> dict | None:
     """Process a single fetched report through the full pipeline.
 
     1. Compute sha256(url + publish_date)
-    2. Dedup check
+    2. Dedup check (catalog first, then filesystem)
     3. HTML → markdown → run_extraction → save
        OR PDF → delegate to doc_parser.pipeline.process_file
-    4. Record in sync_store
+    4. Insert into catalog + record in sync_store
 
     Returns the result dict, or None if skipped.
     """
@@ -41,13 +43,17 @@ async def process_report(
     store = SyncStore(settings.sync_db_path)
 
     try:
-        # Dedup check
-        if not force and has_result(settings.extraction_path, sha):
-            logger.info("Skipping %s -- result exists", fetch_result.source_id)
-            return None
+        # Dedup check — prefer catalog, fall back to filesystem
+        if not force:
+            if catalog is not None and catalog.has(sha):
+                logger.info("Skipping %s -- in catalog", fetch_result.source_id)
+                return None
+            if catalog is None and has_result(settings.extraction_path, sha):
+                logger.info("Skipping %s -- result exists", fetch_result.source_id)
+                return None
 
         if fetch_result.content_type == "pdf":
-            result = await _process_pdf(settings, sha, fetch_result)
+            result = await _process_pdf(settings, sha, fetch_result, catalog=catalog)
         else:
             result = await _process_html(settings, sha, fetch_result)
 
@@ -59,9 +65,13 @@ async def process_report(
         result["country"] = fetch_result.country
         result["language"] = fetch_result.language
 
-        # Save
+        # Save JSON
         path = save_result(settings.extraction_path, result)
         logger.info("Saved result to %s", path)
+
+        # Index in catalog
+        if catalog is not None:
+            save_to_catalog(catalog, result, path)
 
         # Record success
         store.record_fetch(
@@ -152,7 +162,8 @@ async def _process_html(
 
 
 async def _process_pdf(
-    settings: Settings, sha: str, fr: FetchResult
+    settings: Settings, sha: str, fr: FetchResult,
+    catalog: Catalog | None = None,
 ) -> dict | None:
     """Delegate PDF processing to doc_parser.pipeline.process_file."""
     from doc_parser.pipeline import process_file
@@ -166,13 +177,6 @@ async def _process_pdf(
     pdf_path.write_bytes(fr.pdf_bytes)
 
     dp_settings = settings.to_doc_parser_settings()
-    # Override extraction_path so doc_parser saves to our data dir
-    dp_settings = Settings(
-        **{
-            **dp_settings.model_dump(),
-            "data_dir": settings.data_dir,
-        }
-    )
 
     result = await process_file(
         dp_settings,
@@ -181,11 +185,17 @@ async def _process_pdf(
         source=f"gov_report:{fr.source_id}",
         file_name=fr.title or f"{fr.source_id}.pdf",
         force=True,
+        catalog=catalog,
     )
     return result
 
 
 # -- High-level entry points for CLI ----------------------------------------
+
+
+def _open_catalog(settings: Settings) -> Catalog:
+    """Open the catalog DB in the extraction (output) directory."""
+    return Catalog(settings.extraction_path / "catalog.db")
 
 
 async def process_source(
@@ -196,11 +206,15 @@ async def process_source(
 
     fetcher = get_fetcher(source_id, settings)
     fetch_results = await fetcher.fetch_latest()
+    catalog = _open_catalog(settings)
     results = []
-    for fr in fetch_results:
-        result = await process_report(settings, fr, force=force)
-        if result is not None:
-            results.append(result)
+    try:
+        for fr in fetch_results:
+            result = await process_report(settings, fr, force=force, catalog=catalog)
+            if result is not None:
+                results.append(result)
+    finally:
+        catalog.close()
     return results
 
 
@@ -228,14 +242,18 @@ async def process_rss_items(
     """Process a list of RSS items through the pipeline."""
     from gov_report.fetchers import get_fetcher
 
+    catalog = _open_catalog(settings)
     results = []
-    for item in items:
-        try:
-            fetcher = get_fetcher(item.source_id, settings)
-            fr = await fetcher.fetch_by_url(item.url)
-            result = await process_report(settings, fr, force=force)
-            if result is not None:
-                results.append(result)
-        except Exception as exc:
-            logger.error("RSS item %s failed: %s", item.url, exc)
+    try:
+        for item in items:
+            try:
+                fetcher = get_fetcher(item.source_id, settings)
+                fr = await fetcher.fetch_by_url(item.url)
+                result = await process_report(settings, fr, force=force, catalog=catalog)
+                if result is not None:
+                    results.append(result)
+            except Exception as exc:
+                logger.error("RSS item %s failed: %s", item.url, exc)
+    finally:
+        catalog.close()
     return results

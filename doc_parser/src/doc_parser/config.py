@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     # Local storage root
     data_dir: Path = Path("data")
 
+    # Unified output directory (overrides extraction_path when set)
+    output_dir: Path = Path("")
+
     # TextIn parse settings
     textin_parse_mode: str = "auto"
     textin_max_concurrent: int = 3
@@ -46,7 +49,9 @@ class Settings(BaseSettings):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def extraction_path(self) -> Path:
-        return self.data_dir / "extraction"
+        if self.output_dir != Path(""):
+            return self.output_dir
+        return Path(__file__).resolve().parents[3] / "output"
 
     def ensure_dirs(self) -> None:
         """Create data directories if they don't exist."""

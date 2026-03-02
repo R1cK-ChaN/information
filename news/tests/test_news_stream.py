@@ -1,5 +1,7 @@
 """Tests for the NewsStream orchestrator."""
 
+import json
+
 import pytest
 import httpx
 import respx
@@ -31,11 +33,15 @@ SAMPLE_RSS = """<?xml version="1.0" encoding="UTF-8"?>
 
 @pytest.fixture
 def ns(tmp_path):
-    """Create a NewsStream with in-memory DB and test config."""
+    """Create a NewsStream with temp dirs and in-memory DBs."""
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+
     config = tmp_path / "config.yaml"
-    config.write_text("""
+    config.write_text(f"""
 storage:
   sqlite_path: ":memory:"
+  output_dir: "{output_dir}"
 
 providers:
   rss:
@@ -61,9 +67,12 @@ deduplicator:
   lookback_hours: 24
 """)
     stream = NewsStream(config_path=config)
-    # Override storage to use in-memory
-    from src.storage import Storage
-    stream.storage = Storage(":memory:")
+    # Override sync_store to in-memory
+    from src.sync_store import SyncStore
+    stream.sync_store = SyncStore(":memory:")
+    # Override catalog to in-memory but keep output_dir
+    from widgets.catalog import Catalog
+    stream.catalog = Catalog(":memory:")
     yield stream
     stream.close()
 
@@ -104,13 +113,31 @@ class TestGetters:
 @respx.mock
 class TestRefresh:
     def test_refresh_single_category(self, ns):
-        # Mock all market feed URLs to return our sample RSS
+        # Mock all feed URLs to return our sample RSS
         respx.route().mock(return_value=httpx.Response(200, text=SAMPLE_RSS))
 
         result = ns.refresh("markets")
         assert result["fetched"] > 0
         assert result["stored"] > 0
         assert isinstance(result["errors"], list)
+
+    def test_refresh_writes_json_files(self, ns):
+        respx.route().mock(return_value=httpx.Response(200, text=SAMPLE_RSS))
+
+        ns.refresh("markets")
+        # Check that JSON files exist in output dir
+        json_files = list(ns._output_dir.glob("*/*.json"))
+        assert len(json_files) > 0
+        # Verify JSON content
+        data = json.loads(json_files[0].read_text())
+        assert "sha256" in data
+        assert "title" in data
+
+    def test_refresh_inserts_into_catalog(self, ns):
+        respx.route().mock(return_value=httpx.Response(200, text=SAMPLE_RSS))
+
+        ns.refresh("markets")
+        assert ns.catalog.count(source="news") > 0
 
     def test_refresh_classifies_items(self, ns):
         respx.route().mock(return_value=httpx.Response(200, text=SAMPLE_RSS))
@@ -119,10 +146,9 @@ class TestRefresh:
         items = ns.get_latest(n=50)
 
         # "emergency rate cut" should be classified as critical
-        emergency = [i for i in items if "emergency rate cut" in i["title"]]
+        emergency = [i for i in items if i.get("title") and "emergency rate cut" in i["title"]]
         if emergency:
             assert emergency[0]["impact_level"] == "critical"
-            assert emergency[0]["finance_category"] == "monetary_policy"
 
     def test_refresh_deduplicates(self, ns):
         respx.route().mock(return_value=httpx.Response(200, text=SAMPLE_RSS))

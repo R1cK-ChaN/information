@@ -9,7 +9,7 @@ from pathlib import Path
 
 from doc_parser.config import Settings
 from doc_parser.hasher import sha256_file
-from doc_parser.storage import has_result, load_result, save_result
+from doc_parser.storage import has_result, load_result, save_result, save_to_catalog
 from doc_parser.steps.step2_parse import run_parse
 from doc_parser.steps.step3_extract import parse_date_to_epoch, run_extraction
 from doc_parser.watermark import strip_watermark_lines
@@ -27,15 +27,21 @@ async def process_file(
     file_name: str,
     force: bool = False,
     parse_mode: str | None = None,
+    catalog: object | None = None,
     **extra_meta: object,
 ) -> dict | None:
     """Full pipeline: parse -> enhance -> extract -> save JSON.
 
     Returns the result dict, or None if skipped.
     """
-    if not force and has_result(settings.extraction_path, sha):
-        logger.info("Skipping %s -- result exists (use --force)", file_name)
-        return None
+    # Dedup: prefer catalog when available, fall back to filesystem check
+    if not force:
+        if catalog is not None and catalog.has(sha):
+            logger.info("Skipping %s -- in catalog (use --force)", file_name)
+            return None
+        if catalog is None and has_result(settings.extraction_path, sha):
+            logger.info("Skipping %s -- result exists (use --force)", file_name)
+            return None
 
     # 1. Parse
     parse_result = await run_parse(settings, file_path, parse_mode=parse_mode)
@@ -126,6 +132,10 @@ async def process_file(
     # 7. Save
     path = save_result(settings.extraction_path, result)
     logger.info("Saved result to %s", path)
+
+    # 8. Index in catalog
+    if catalog is not None:
+        save_to_catalog(catalog, result, path)
 
     return result
 

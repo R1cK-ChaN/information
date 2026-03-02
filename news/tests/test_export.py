@@ -10,7 +10,6 @@ from src.export import (
     convert_item,
     save_extraction,
     has_extraction,
-    export_items,
 )
 
 
@@ -142,33 +141,3 @@ class TestSaveExtraction:
         assert has_extraction("0" * 64, tmp_path) is False
 
 
-# ---------------------------------------------------------------------------
-# export_items
-# ---------------------------------------------------------------------------
-
-class TestExportItems:
-    def test_basic_export(self, tmp_path):
-        items = [_sample_item()]
-        stats = export_items(items, tmp_path)
-        assert stats == {"exported": 1, "skipped": 0, "total": 1}
-
-    def test_skips_existing(self, tmp_path):
-        items = [_sample_item()]
-        export_items(items, tmp_path)
-        stats = export_items(items, tmp_path)
-        assert stats == {"exported": 0, "skipped": 1, "total": 1}
-
-    def test_force_overwrites(self, tmp_path):
-        items = [_sample_item()]
-        export_items(items, tmp_path)
-        stats = export_items(items, tmp_path, force=True)
-        assert stats == {"exported": 1, "skipped": 0, "total": 1}
-
-    def test_multiple_items(self, tmp_path):
-        items = [
-            _sample_item(link="https://example.com/1", item_id="aaa"),
-            _sample_item(link="https://example.com/2", item_id="bbb"),
-        ]
-        stats = export_items(items, tmp_path)
-        assert stats["exported"] == 2
-        assert stats["total"] == 2

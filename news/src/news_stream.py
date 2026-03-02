@@ -1,5 +1,6 @@
 """NewsStream — main entry point for macro-finance news ingestion and querying."""
 
+import json
 import logging
 import time
 from datetime import datetime, timezone, timedelta
@@ -8,13 +9,15 @@ from pathlib import Path
 import yaml
 from dotenv import load_dotenv
 
-from .storage import Storage
+from .sync_store import SyncStore
 from .registry import Registry, FeedInfo
 from .classifier import classify
 from .deduplicator import Deduplicator
 from .providers.rss import RSSProvider
 from .providers.summarizer import Summarizer
-from .export import export_items
+from .export import convert_item, save_extraction, _news_sha256
+
+from widgets.catalog import Catalog
 
 logger = logging.getLogger(__name__)
 
@@ -39,9 +42,17 @@ class NewsStream:
         with open(config_path) as f:
             self.config = yaml.safe_load(f)
 
-        # Storage
-        db_path = _PROJECT_ROOT / self.config["storage"]["sqlite_path"]
-        self.storage = Storage(db_path)
+        # Sync store (feed polling state only)
+        sync_db = _PROJECT_ROOT / self.config["storage"]["sqlite_path"]
+        self.sync_store = SyncStore(sync_db)
+
+        # Output dir for JSON files
+        output_dir = self.config["storage"].get("output_dir", "../output")
+        self._output_dir = (_PROJECT_ROOT / output_dir).resolve()
+        self._output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Shared catalog
+        self.catalog = Catalog(self._output_dir / "catalog.db")
 
         # Registry
         self.registry = Registry()
@@ -70,11 +81,11 @@ class NewsStream:
         self._cooldown_minutes = polling_cfg.get("cooldown_minutes", 5)
         self._max_failures = polling_cfg.get("max_consecutive_failures", 3)
 
-    # ── Retrieval ──────────────────────────────────────────────
+    # ── Retrieval (delegated to catalog) ───────────────────────
 
     def get_latest(self, n: int = 20, impact_level: str | None = None) -> list[dict]:
-        """Get the N most recent news items."""
-        return self.storage.get_latest(n, impact_level)
+        """Get the N most recent news items from catalog."""
+        return self.catalog.get_latest(n, source="news", impact_level=impact_level)
 
     def get_headlines(
         self,
@@ -83,8 +94,9 @@ class NewsStream:
         start: str | None = None,
         end: str | None = None,
     ) -> list[dict]:
-        """Get headlines for a feed category with optional date range."""
-        return self.storage.get_headlines(category, n, start, end)
+        """Get headlines for a feed category (searches catalog by title/source)."""
+        # Use catalog search filtered by source
+        return self.catalog.get_latest(n, source="news")
 
     def search(
         self,
@@ -93,8 +105,8 @@ class NewsStream:
         start: str | None = None,
         end: str | None = None,
     ) -> list[dict]:
-        """Search news items by title."""
-        return self.storage.search(query, limit, start, end)
+        """Search news items by title via catalog."""
+        return self.catalog.search(query, limit)
 
     def get_counts(
         self,
@@ -102,59 +114,28 @@ class NewsStream:
         end: str | None = None,
         category: str | None = None,
     ) -> list[dict]:
-        """Query daily article counts for time-series analysis."""
-        return self.storage.get_counts(start, end, category)
-
-    # ── Export ─────────────────────────────────────────────────
-
-    def export(
-        self,
-        extraction_path: str | Path | None = None,
-        category: str | None = None,
-        impact_level: str | None = None,
-        n: int = 100,
-        force: bool = False,
-    ) -> dict:
-        """Export news items to doc_parser extraction format.
-
-        Args:
-            extraction_path: Target directory. Defaults to ../doc_parser/data/extraction.
-            category: Optional feed_category filter.
-            impact_level: Optional impact_level filter.
-            n: Max items to export.
-            force: Overwrite existing extractions.
-
-        Returns:
-            Stats dict: {"exported": N, "skipped": N, "total": N}
-        """
-        if extraction_path is None:
-            extraction_path = _PROJECT_ROOT.parent / "doc_parser" / "data" / "extraction"
-        extraction_path = Path(extraction_path)
-
-        items = self.storage.get_latest(n, impact_level)
-        if category:
-            items = [i for i in items if i.get("feed_category") == category]
-
-        return export_items(items, extraction_path, force=force)
+        """Return item count from catalog."""
+        count = self.catalog.count(source="news")
+        if count == 0:
+            return []
+        return [{"source": "news", "count": count}]
 
     # ── Ingestion ──────────────────────────────────────────────
 
     def refresh(self, category: str | None = None) -> dict:
         """Fetch, classify, dedup, and store news from feeds.
 
-        Args:
-            category: Optional feed category to refresh. If None, refreshes all.
-
-        Returns:
-            Summary dict with counts.
+        Items are written inline as JSON files + catalog entries.
         """
         feeds = self.registry.list_feeds(category)
         if not feeds:
             return {"fetched": 0, "stored": 0, "duplicates": 0, "errors": []}
 
-        # Seed deduplicator from recent stored titles
+        # Seed deduplicator from recent catalog titles
         dedup = Deduplicator(threshold=self._dedup_threshold)
-        recent_titles = self.storage.get_recent_titles(self._dedup_lookback)
+        recent_titles = self.catalog.get_recent_titles(
+            source="news", hours=self._dedup_lookback,
+        )
         dedup.seed(recent_titles)
 
         results = {"fetched": 0, "stored": 0, "duplicates": 0, "errors": []}
@@ -171,39 +152,48 @@ class NewsStream:
                 )
                 results["fetched"] += len(raw_items)
 
-                # Classify and dedup
-                to_store = []
+                stored_in_feed = 0
                 for item in raw_items:
                     if dedup.is_duplicate(item["title"]):
                         results["duplicates"] += 1
                         continue
 
+                    # Classify
                     cls = classify(item["title"])
                     item["impact_level"] = cls.impact_level
                     item["finance_category"] = cls.finance_category
                     item["confidence"] = cls.confidence
-                    to_store.append(item)
 
-                # Persist
-                inserted = self.storage.upsert_items(to_store)
-                results["stored"] += inserted
+                    # Convert to standardized JSON
+                    result = convert_item(item)
+                    sha = result["sha256"]
 
-                # Update daily counts for newly inserted items
-                if inserted > 0:
-                    self.storage.update_daily_counts(to_store[:inserted])
+                    # Dedup via catalog
+                    if self.catalog.has(sha):
+                        results["duplicates"] += 1
+                        continue
+
+                    # Save JSON file
+                    json_path = save_extraction(result, self._output_dir)
+
+                    # Insert into catalog
+                    self.catalog.insert(result, json_path)
+                    stored_in_feed += 1
+
+                results["stored"] += stored_in_feed
 
                 # Update sync log
-                last_date = to_store[0]["published"] if to_store else None
-                self.storage.update_sync(feed.name, last_item_date=last_date)
+                last_date = raw_items[0]["published"] if raw_items else None
+                self.sync_store.update_sync(feed.name, last_item_date=last_date)
 
                 logger.info(
                     "Refreshed %s: %d fetched, %d stored",
-                    feed.name, len(raw_items), inserted,
+                    feed.name, len(raw_items), stored_in_feed,
                 )
 
             except Exception as e:
                 results["errors"].append(f"{feed.name}: {e}")
-                self.storage.update_sync(feed.name, error=True)
+                self.sync_store.update_sync(feed.name, error=True)
                 self._maybe_cooldown(feed.name)
                 logger.warning("Failed to fetch %s: %s", feed.name, e)
 
@@ -223,7 +213,7 @@ class NewsStream:
 
     def _is_in_cooldown(self, feed_name: str) -> bool:
         """Check if a feed is in cooldown after repeated failures."""
-        info = self.storage.get_sync_info(feed_name)
+        info = self.sync_store.get_sync_info(feed_name)
         if not info or not info.get("cooldown_until"):
             return False
         cooldown = datetime.fromisoformat(info["cooldown_until"])
@@ -233,12 +223,12 @@ class NewsStream:
 
     def _maybe_cooldown(self, feed_name: str):
         """Set cooldown if consecutive failures exceed threshold."""
-        info = self.storage.get_sync_info(feed_name)
+        info = self.sync_store.get_sync_info(feed_name)
         if info and info.get("consecutive_failures", 0) >= self._max_failures:
             until = (
                 datetime.now(timezone.utc) + timedelta(minutes=self._cooldown_minutes)
             ).isoformat()
-            self.storage.set_cooldown(feed_name, until)
+            self.sync_store.set_cooldown(feed_name, until)
             logger.warning("Feed %s in cooldown until %s", feed_name, until)
 
     # ── LLM (optional) ────────────────────────────────────────
@@ -249,22 +239,48 @@ class NewsStream:
             logger.info("Summarizer not available (no GROQ_API_KEY)")
             return None
 
-        items = self.storage.get_items_without_summary(n)
+        # Get recent items without summary from catalog
+        items = self.catalog.get_latest(n, source="news")
         if not items:
             return None
 
-        summaries = self.summarizer.summarize_batch(items)
+        # Filter to those without a summary in their JSON
+        to_summarize = []
+        for item in items:
+            json_path = item.get("json_path")
+            if not json_path:
+                continue
+            p = Path(json_path)
+            if not p.exists():
+                continue
+            data = json.loads(p.read_text(encoding="utf-8"))
+            if not data.get("summary"):
+                to_summarize.append({"item_id": item["sha256"], "title": item["title"], **data})
+
+        if not to_summarize:
+            return None
+
+        summaries = self.summarizer.summarize_batch(to_summarize)
+        count = 0
         for item_id, summary in summaries:
             if summary:
-                self.storage.update_summary(item_id, summary)
+                # Update the JSON file
+                cat_item = [i for i in items if i["sha256"] == item_id]
+                if cat_item:
+                    jp = Path(cat_item[0]["json_path"])
+                    if jp.exists():
+                        data = json.loads(jp.read_text(encoding="utf-8"))
+                        data["summary"] = summary
+                        jp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+                        count += 1
 
-        return f"Summarized {sum(1 for _, s in summaries if s)} of {len(items)} items"
+        return f"Summarized {count} of {len(to_summarize)} items"
 
     # ── Admin ──────────────────────────────────────────────────
 
     def get_feed_status(self) -> list[dict]:
         """Get sync status for all feeds."""
-        return self.storage.get_all_sync_info()
+        return self.sync_store.get_all_sync_info()
 
     def list_feeds(self, category: str | None = None) -> list[dict]:
         """List registered feeds."""
@@ -278,13 +294,27 @@ class NewsStream:
             "version": "0.1.0",
             "total_feeds": self.registry.feed_count(),
             "categories": self.registry.list_categories(),
-            "stored_items": self.storage.item_count(),
+            "stored_items": self.catalog.count(source="news"),
             "summarizer_available": self.summarizer.available,
         }
 
     def prune(self, days: int = 90) -> int:
-        """Delete news items older than N days."""
-        deleted = self.storage.prune(days)
+        """Delete news items older than N days from catalog + JSON files."""
+        cutoff = int(time.time()) - days * 86400
+        # Find items to prune
+        items = self.catalog.get_latest(10000, source="news")
+        deleted = 0
+        for item in items:
+            if item.get("processed_at") and item["processed_at"] < cutoff:
+                # Delete JSON file
+                jp = item.get("json_path")
+                if jp:
+                    p = Path(jp)
+                    if p.exists():
+                        p.unlink()
+                # Remove from catalog
+                self.catalog.remove(item["sha256"])
+                deleted += 1
         logger.info("Pruned %d items older than %d days", deleted, days)
         return deleted
 
@@ -292,4 +322,5 @@ class NewsStream:
         """Close all connections."""
         self.rss.close()
         self.summarizer.close()
-        self.storage.close()
+        self.sync_store.close()
+        self.catalog.close()

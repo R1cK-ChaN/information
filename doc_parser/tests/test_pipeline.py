@@ -27,6 +27,7 @@ def _make_settings(tmp_path: Path) -> Settings:
         textin_app_id="test-app",
         textin_secret_code="test-secret",
         data_dir=tmp_path / "data",
+        output_dir=tmp_path / "output",
     )
     s.ensure_dirs()
     return s

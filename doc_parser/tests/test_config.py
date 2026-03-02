@@ -29,14 +29,27 @@ def test_parsed_path_computed(tmp_path: Path):
     assert s.parsed_path == tmp_path / "data" / "parsed"
 
 
-def test_extraction_path_computed(tmp_path: Path):
-    """extraction_path is data_dir / 'extraction'."""
+def test_extraction_path_defaults_to_repo_output(tmp_path: Path):
+    """extraction_path defaults to repo-root/output when output_dir is unset."""
     s = Settings(
         textin_app_id="a",
         textin_secret_code="s",
         data_dir=tmp_path / "data",
     )
-    assert s.extraction_path == tmp_path / "data" / "extraction"
+    # Default: resolved from __file__ → .../output
+    assert s.extraction_path.name == "output"
+
+
+def test_output_dir_override(tmp_path: Path):
+    """When output_dir is set, extraction_path returns it."""
+    out = tmp_path / "custom_output"
+    s = Settings(
+        textin_app_id="a",
+        textin_secret_code="s",
+        data_dir=tmp_path / "data",
+        output_dir=out,
+    )
+    assert s.extraction_path == out
 
 
 def test_ensure_dirs_creates_directory(tmp_path: Path):
@@ -45,6 +58,7 @@ def test_ensure_dirs_creates_directory(tmp_path: Path):
         textin_app_id="a",
         textin_secret_code="s",
         data_dir=tmp_path / "data",
+        output_dir=tmp_path / "output",
     )
     assert not s.parsed_path.exists()
     assert not s.extraction_path.exists()
@@ -59,6 +73,7 @@ def test_ensure_dirs_idempotent(tmp_path: Path):
         textin_app_id="a",
         textin_secret_code="s",
         data_dir=tmp_path / "data",
+        output_dir=tmp_path / "output",
     )
     s.ensure_dirs()
     s.ensure_dirs()  # no error

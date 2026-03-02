@@ -1,5 +1,6 @@
 storage:
-  sqlite_path: "data/news.db"
+  sqlite_path: "data/news_sync.db"
+  output_dir: "../output"
 
 providers:
   rss:

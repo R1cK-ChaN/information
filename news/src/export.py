@@ -161,24 +161,3 @@ def has_extraction(sha: str, extraction_path: Path) -> bool:
     return (extraction_path / sha[:4] / f"{sha}.json").exists()
 
 
-def export_items(
-    items: list[dict],
-    extraction_path: Path,
-    force: bool = False,
-) -> dict:
-    """Batch convert and save news items to extraction format.
-
-    Returns:
-        {"exported": N, "skipped": N, "total": N}
-    """
-    exported = 0
-    skipped = 0
-    for item in items:
-        sha = _news_sha256(item["link"])
-        if not force and has_extraction(sha, extraction_path):
-            skipped += 1
-            continue
-        result = convert_item(item)
-        save_extraction(result, extraction_path)
-        exported += 1
-    return {"exported": exported, "skipped": skipped, "total": len(items)}

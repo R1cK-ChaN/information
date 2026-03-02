@@ -13,7 +13,8 @@ LLMs hallucinate. When an analyst agent needs to reason about CPI prints, FOMC d
 | **[data/macro_data_layer](data/macro_data_layer/)** | Structured macro time series (FRED, etc.). Provides clean numeric data for indicators like GDP, CPI, unemployment, yields. |
 | **[doc_parser](doc_parser/)** | PDF/document parsing pipeline. Ingests broker research, policy reports, and other PDFs via OCR (TextIn), then runs LLM entity extraction to produce structured JSON with 17 standardized fields. |
 | **[gov_report](gov_report/)** | Government report crawler. Fetches official economic releases from BLS, Fed, BEA, ISM, NBS, PBOC, and other US/CN agencies. Converts HTML to markdown, runs the same LLM extraction as doc_parser, stores results in identical JSON schema. |
-| **[news](news/)** | Financial news stream. Aggregates headlines from RSS feeds, classifies by topic/impact, deduplicates, and exports structured summaries. |
+| **[news](news/)** | Financial news stream. Aggregates headlines from RSS feeds, classifies by topic/impact, deduplicates via Jaccard similarity, and writes structured JSON inline during refresh. |
+| **[widgets](widgets/)** | Shared utilities. Provides the `Catalog` SQLite index used by all packages for dedup and querying. |
 
 ## Data Flow
 
@@ -27,17 +28,22 @@ Official Sources (BLS, Fed, NBS, PBOC, ...)
    └────┬─────┘     └─────┬──────┘     └──┬───┘
         │                 │               │
         ▼                 ▼               ▼
-   Standardized JSON (17 entity fields)   Classified headlines
+   Standardized JSON (17 entity fields + markdown)
         │                 │               │
-        └────────┬────────┘               │
-                 ▼                        ▼
-          data/extraction/          data/news.db
+        └────────┬────────┴───────────────┘
+                 ▼
+            output/
+              ├── catalog.db        ← SQLite index (all fields + sha256 + json_path)
+              └── <sha[:4]>/
+                    └── <sha>.json  ← one JSON per document/article
                  │
                  ▼
         Analyst Agent (grounded reasoning)
 ```
 
-## JSON Schema (shared by doc_parser & gov_report)
+All three packages write to a single `output/` directory at the repo root. Each item is deduplicated by SHA-256 and indexed in `output/catalog.db` for fast cross-package queries.
+
+## JSON Schema (shared by all packages)
 
 Every extracted document produces a JSON with these entity fields:
 
@@ -48,13 +54,16 @@ Plus full `markdown` content, `parse_info`, and `extraction_info`.
 ## Quick Start
 
 ```bash
+# Install shared widgets (required by all packages)
+pip install -e .
+
 # Install packages (each is a standalone Python package)
 pip install -e ./doc_parser
 pip install -e ./gov_report
 pip install -e ./news
 pip install -e ./data/macro_data_layer
 
-# Fetch a US government report
+# Fetch a US government report → JSON in output/ + catalog entry
 gov-report fetch us_bls_cpi
 
 # Fetch a CN government report

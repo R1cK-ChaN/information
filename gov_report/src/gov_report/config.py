@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     # Local storage root (self-contained inside gov_report/)
     data_dir: Path = Path("data")
 
+    # Unified output directory (overrides extraction_path when set)
+    output_dir: Path = Path("")
+
     # HTTP settings
     user_agent: str = "gov-report-crawler/0.1"
     request_timeout: int = 30
@@ -38,7 +41,9 @@ class Settings(BaseSettings):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def extraction_path(self) -> Path:
-        return self.data_dir / "extraction"
+        if self.output_dir != Path(""):
+            return self.output_dir
+        return Path(__file__).resolve().parents[3] / "output"
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -63,6 +68,7 @@ class Settings(BaseSettings):
             textin_app_id=self.textin_app_id,
             textin_secret_code=self.textin_secret_code,
             data_dir=self.data_dir,
+            output_dir=self.output_dir,
             llm_api_key=self.llm_api_key,
             llm_base_url=self.llm_base_url,
             llm_model=self.llm_model,
