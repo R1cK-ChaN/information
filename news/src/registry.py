@@ -1,4 +1,4 @@
-"""Feed registry: FeedInfo dataclass + ~60 macro-finance feed definitions."""
+"""Feed registry: FeedInfo dataclass + macro-finance feed definitions."""
 
 from dataclasses import dataclass
 
@@ -101,6 +101,20 @@ FEEDS: list[FeedInfo] = [
     FeedInfo("Market Outlook", _gnews('("stock+market+outlook"+OR+"Wall+Street+outlook"+OR+"stock+market+forecast"+OR+"bull+market"+OR+"bear+market")+-site:openpr.com', "3d"), "analysis"),
     FeedInfo("Risk & Volatility", _gnews('("S%26P+500"+volatility+OR+VIX+OR+CBOE+OR+"risk+off"+stocks+OR+"market+correction")+-site:marketsmojo.com', "3d"), "analysis"),
     FeedInfo("Bank Research", _gnews('("Goldman+Sachs"+OR+"JPMorgan"+OR+"Morgan+Stanley")+forecast+OR+outlook', "3d"), "analysis"),
+
+    # ── china (12) ───────────────────────────────────────────
+    FeedInfo("SCMP China Economy", "https://www.scmp.com/rss/318421/feed", "china"),
+    FeedInfo("SCMP China", "https://www.scmp.com/rss/4/feed", "china"),
+    FeedInfo("SCMP Business", "https://www.scmp.com/rss/92/feed", "china"),
+    FeedInfo("Xinhua China", "http://www.xinhuanet.com/english/rss/chinarss.xml", "china"),
+    FeedInfo("Xinhua Business", "http://www.xinhuanet.com/english/rss/businessrss.xml", "china"),
+    FeedInfo("China Daily BizChina", "https://www.chinadaily.com.cn/rss/bizchina_rss.xml", "china"),
+    FeedInfo("China Daily News", "https://www.chinadaily.com.cn/rss/china_rss.xml", "china"),
+    FeedInfo("CGTN Business", "https://www.cgtn.com/subscribe/rss/section/business.xml", "china"),
+    FeedInfo("China Trade Watch", _gnews('(China+trade+OR+"China+tariff"+OR+"US+China"+trade)', "2d"), "china"),
+    FeedInfo("China Markets", _gnews('("Shanghai+composite"+OR+"Hang+Seng"+OR+"CSI+300"+OR+"A-shares"+OR+"H-shares")', "2d"), "china"),
+    FeedInfo("China Tech", _gnews('(Alibaba+OR+Tencent+OR+BYD+OR+Huawei+OR+Xiaomi)+stock+OR+earnings+OR+regulation', "3d"), "china"),
+    FeedInfo("China Policy", _gnews('("China+GDP"+OR+"China+PMI"+OR+"China+CPI"+OR+"China+stimulus"+OR+"NPC"+OR+"NDRC")', "3d"), "china"),
 
     # ── thinktanks (5) ────────────────────────────────────────
     FeedInfo("Foreign Policy", "https://foreignpolicy.com/feed/", "thinktanks"),
