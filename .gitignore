@@ -28,3 +28,6 @@ Thumbs.db
 
 # Claude
 .claude/
+
+6_information_layer/
+ai_system_prompt/
