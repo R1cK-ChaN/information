@@ -147,6 +147,79 @@ def convert_item(item: dict) -> dict:
     }
 
 
+def convert_item_llm(
+    item: dict,
+    extracted_fields: dict,
+    llm_model: str,
+    duration_ms: int,
+) -> dict:
+    """Convert a news item using LLM-extracted fields (with fallbacks to item metadata)."""
+    link = item["link"]
+    sha = _news_sha256(link)
+    summary = item.get("summary")
+
+    def _field(key: str, fallback=None):
+        v = extracted_fields.get(key)
+        return v if v else fallback
+
+    confidence_raw = _field("confidence", 0.3)
+    try:
+        confidence = float(confidence_raw)
+    except (TypeError, ValueError):
+        confidence = 0.3
+
+    contains_commentary_raw = _field("contains_commentary", summary is not None)
+    if isinstance(contains_commentary_raw, str):
+        contains_commentary = contains_commentary_raw.lower() in ("true", "1", "yes")
+    else:
+        contains_commentary = bool(contains_commentary_raw)
+
+    return {
+        "sha256": sha,
+        "file_name": f"news_{item['item_id']}.json",
+        "source": "news",
+        "local_path": link,
+        "mime_type": "text/html",
+        "file_size_bytes": 0,
+        "processed_at": int(time.time()),
+
+        "title": _field("title", item["title"]),
+        "institution": _field("institution", item["source"]),
+        "authors": _field("authors"),
+        "publish_date": _field("publish_date", item["published"][:10]),
+        "data_period": _field("data_period"),
+        "country": _field("country"),
+        "market": _field("market"),
+        "asset_class": _field("asset_class"),
+        "sector": _field("sector"),
+        "document_type": _field("document_type", "News Article"),
+        "event_type": _field("event_type"),
+        "subject": _field("subject", item["title"]),
+        "subject_id": _field("subject_id"),
+        "language": _field("language", "en"),
+        "contains_commentary": contains_commentary,
+        "impact_level": _field("impact_level", "info"),
+        "confidence": confidence,
+
+        "markdown": _compose_markdown(item),
+
+        "parse_info": {
+            "page_count": 0,
+            "has_chart": False,
+            "has_table": False,
+            "chart_count": 0,
+            "table_count": 0,
+            "duration_ms": 0,
+            "parse_mode": "news_feed",
+        },
+        "extraction_info": {
+            "provider": "llm",
+            "llm_model": llm_model,
+            "duration_ms": duration_ms,
+        },
+    }
+
+
 def save_extraction(result: dict, extraction_path: Path) -> Path:
     """Write a result dict as JSON to the bucketed extraction path."""
     sha = result["sha256"]

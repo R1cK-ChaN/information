@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 # Find project root (where config/ lives)
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
+_REPO_ROOT = _PROJECT_ROOT.parent.parent
 
 
 class MacroDataLayer:
@@ -30,7 +31,8 @@ class MacroDataLayer:
     """
 
     def __init__(self, config_path: str | Path | None = None):
-        load_dotenv(_PROJECT_ROOT / ".env")
+        load_dotenv(_REPO_ROOT / ".env")
+        load_dotenv(_PROJECT_ROOT / ".env", override=True)
 
         if config_path is None:
             config_path = _PROJECT_ROOT / "config" / "data_layer.yaml"

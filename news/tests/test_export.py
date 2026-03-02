@@ -8,6 +8,7 @@ import pytest
 from src.export import (
     _news_sha256,
     convert_item,
+    convert_item_llm,
     save_extraction,
     has_extraction,
 )
@@ -139,5 +140,85 @@ class TestSaveExtraction:
 
     def test_has_extraction_false(self, tmp_path):
         assert has_extraction("0" * 64, tmp_path) is False
+
+
+# ---------------------------------------------------------------------------
+# convert_item_llm
+# ---------------------------------------------------------------------------
+
+class TestConvertItemLLM:
+    _LLM_FIELDS = {
+        "title": "Fed Holds Rates Steady at June Meeting",
+        "institution": "Federal Reserve",
+        "authors": "J. Powell",
+        "publish_date": "2025-06-15",
+        "data_period": None,
+        "country": "US",
+        "market": "US Treasuries",
+        "asset_class": "Fixed Income",
+        "sector": "Interest Rate",
+        "document_type": "Policy Statement",
+        "event_type": "Policy Statement",
+        "subject": "Federal Funds Rate",
+        "subject_id": "FEDFUNDS",
+        "language": "en",
+        "contains_commentary": True,
+        "impact_level": "high",
+        "confidence": 0.9,
+    }
+
+    def test_all_fields_present(self):
+        result = convert_item_llm(_sample_item(), self._LLM_FIELDS, "openai/gpt-4o-mini", 500)
+        expected_keys = {
+            "sha256", "file_name", "source", "local_path", "mime_type",
+            "file_size_bytes", "processed_at",
+            "title", "institution", "authors", "publish_date", "data_period",
+            "country", "market", "asset_class", "sector", "document_type",
+            "event_type", "subject", "subject_id", "language",
+            "contains_commentary", "impact_level", "confidence",
+            "markdown", "parse_info", "extraction_info",
+        }
+        assert set(result.keys()) == expected_keys
+
+    def test_uses_llm_fields(self):
+        result = convert_item_llm(_sample_item(), self._LLM_FIELDS, "openai/gpt-4o-mini", 500)
+        assert result["title"] == "Fed Holds Rates Steady at June Meeting"
+        assert result["institution"] == "Federal Reserve"
+        assert result["authors"] == "J. Powell"
+        assert result["country"] == "US"
+        assert result["market"] == "US Treasuries"
+        assert result["asset_class"] == "Fixed Income"
+        assert result["impact_level"] == "high"
+        assert result["confidence"] == 0.9
+
+    def test_extraction_info_provider_llm(self):
+        result = convert_item_llm(_sample_item(), self._LLM_FIELDS, "openai/gpt-4o-mini", 500)
+        ei = result["extraction_info"]
+        assert ei["provider"] == "llm"
+        assert ei["llm_model"] == "openai/gpt-4o-mini"
+        assert ei["duration_ms"] == 500
+
+    def test_fallback_to_item_metadata(self):
+        """Empty LLM fields should fall back to item metadata."""
+        result = convert_item_llm(_sample_item(), {}, "openai/gpt-4o-mini", 100)
+        assert result["title"] == "Fed Holds Rates Steady"  # from item
+        assert result["institution"] == "CNBC"  # from item["source"]
+        assert result["impact_level"] == "info"  # default fallback
+        assert result["language"] == "en"  # default
+
+    def test_confidence_coerced_to_float(self):
+        fields = {"confidence": "0.85"}
+        result = convert_item_llm(_sample_item(), fields, "openai/gpt-4o-mini", 100)
+        assert result["confidence"] == 0.85
+
+    def test_contains_commentary_string_true(self):
+        fields = {"contains_commentary": "true"}
+        result = convert_item_llm(_sample_item(), fields, "openai/gpt-4o-mini", 100)
+        assert result["contains_commentary"] is True
+
+    def test_contains_commentary_string_false(self):
+        fields = {"contains_commentary": "false"}
+        result = convert_item_llm(_sample_item(), fields, "openai/gpt-4o-mini", 100)
+        assert result["contains_commentary"] is False
 
 

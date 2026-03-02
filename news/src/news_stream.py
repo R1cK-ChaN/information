@@ -1,7 +1,9 @@
 """NewsStream — main entry point for macro-finance news ingestion and querying."""
 
+import asyncio
 import json
 import logging
+import os
 import time
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -15,13 +17,25 @@ from .classifier import classify
 from .deduplicator import Deduplicator
 from .providers.rss import RSSProvider
 from .providers.summarizer import Summarizer
-from .export import convert_item, save_extraction, _news_sha256
+from .export import (
+    convert_item, convert_item_llm, save_extraction,
+    _news_sha256, _compose_markdown,
+)
 
 from widgets.catalog import Catalog
 
 logger = logging.getLogger(__name__)
 
+# Conditional LLM extraction imports
+try:
+    from doc_parser.config import Settings as DocParserSettings
+    from doc_parser.steps.step3_extract import run_extraction
+    _LLM_AVAILABLE = True
+except ImportError:
+    _LLM_AVAILABLE = False
+
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
+_REPO_ROOT = _PROJECT_ROOT.parent
 
 
 class NewsStream:
@@ -35,7 +49,8 @@ class NewsStream:
     """
 
     def __init__(self, config_path: str | Path | None = None):
-        load_dotenv(_PROJECT_ROOT / ".env")
+        load_dotenv(_REPO_ROOT / ".env")
+        load_dotenv(_PROJECT_ROOT / ".env", override=True)
 
         if config_path is None:
             config_path = _PROJECT_ROOT / "config" / "news_stream.yaml"
@@ -81,6 +96,21 @@ class NewsStream:
         self._cooldown_minutes = polling_cfg.get("cooldown_minutes", 5)
         self._max_failures = polling_cfg.get("max_consecutive_failures", 3)
 
+        # LLM extraction (optional — requires doc_parser + LLM_API_KEY)
+        self._llm_settings = None
+        if _LLM_AVAILABLE and os.getenv("LLM_API_KEY"):
+            try:
+                self._llm_settings = DocParserSettings(
+                    textin_app_id=os.getenv("TEXTIN_APP_ID", ""),
+                    textin_secret_code=os.getenv("TEXTIN_SECRET_CODE", ""),
+                    llm_api_key=os.getenv("LLM_API_KEY", ""),
+                    llm_base_url=os.getenv("LLM_BASE_URL", "https://openrouter.ai/api/v1"),
+                    llm_model=os.getenv("LLM_MODEL", "openai/gpt-4o-mini"),
+                )
+                logger.info("LLM extraction enabled (model=%s)", self._llm_settings.llm_model)
+            except Exception as e:
+                logger.warning("Failed to init LLM settings: %s", e)
+
     # ── Retrieval (delegated to catalog) ───────────────────────
 
     def get_latest(self, n: int = 20, impact_level: str | None = None) -> list[dict]:
@@ -125,7 +155,7 @@ class NewsStream:
     def refresh(self, category: str | None = None) -> dict:
         """Fetch, classify, dedup, and store news from feeds.
 
-        Items are written inline as JSON files + catalog entries.
+        Uses LLM extraction when available, falls back to keyword classifier.
         """
         feeds = self.registry.list_feeds(category)
         if not feeds:
@@ -140,6 +170,9 @@ class NewsStream:
 
         results = {"fetched": 0, "stored": 0, "duplicates": 0, "errors": []}
 
+        # Phase 1: Fetch and dedup across all feeds
+        pending_items: list[tuple[FeedInfo, dict]] = []
+
         for feed in feeds:
             if self._is_in_cooldown(feed.name):
                 continue
@@ -152,44 +185,21 @@ class NewsStream:
                 )
                 results["fetched"] += len(raw_items)
 
-                stored_in_feed = 0
                 for item in raw_items:
                     if dedup.is_duplicate(item["title"]):
                         results["duplicates"] += 1
                         continue
 
-                    # Classify
-                    cls = classify(item["title"])
-                    item["impact_level"] = cls.impact_level
-                    item["finance_category"] = cls.finance_category
-                    item["confidence"] = cls.confidence
-
-                    # Convert to standardized JSON
-                    result = convert_item(item)
-                    sha = result["sha256"]
-
-                    # Dedup via catalog
+                    sha = _news_sha256(item["link"])
                     if self.catalog.has(sha):
                         results["duplicates"] += 1
                         continue
 
-                    # Save JSON file
-                    json_path = save_extraction(result, self._output_dir)
-
-                    # Insert into catalog
-                    self.catalog.insert(result, json_path)
-                    stored_in_feed += 1
-
-                results["stored"] += stored_in_feed
+                    pending_items.append((feed, item))
 
                 # Update sync log
                 last_date = raw_items[0]["published"] if raw_items else None
                 self.sync_store.update_sync(feed.name, last_item_date=last_date)
-
-                logger.info(
-                    "Refreshed %s: %d fetched, %d stored",
-                    feed.name, len(raw_items), stored_in_feed,
-                )
 
             except Exception as e:
                 results["errors"].append(f"{feed.name}: {e}")
@@ -199,7 +209,74 @@ class NewsStream:
 
             time.sleep(0.3)  # rate limit courtesy
 
+        # Phase 2: Process collected items
+        if self._llm_settings:
+            stored = asyncio.run(self._process_items_llm(pending_items, results))
+        else:
+            stored = self._process_items_keyword(pending_items, results)
+        results["stored"] = stored
+
         return results
+
+    def _process_items_keyword(
+        self,
+        items: list[tuple[FeedInfo, dict]],
+        results: dict,
+    ) -> int:
+        """Process items using keyword classifier (fallback path)."""
+        stored = 0
+        for feed, item in items:
+            cls = classify(item["title"])
+            item["impact_level"] = cls.impact_level
+            item["finance_category"] = cls.finance_category
+            item["confidence"] = cls.confidence
+
+            result = convert_item(item)
+            json_path = save_extraction(result, self._output_dir)
+            self.catalog.insert(result, json_path)
+            stored += 1
+        return stored
+
+    async def _process_items_llm(
+        self,
+        items: list[tuple[FeedInfo, dict]],
+        results: dict,
+    ) -> int:
+        """Process items using LLM extraction, with per-item fallback."""
+        stored = 0
+        for feed, item in items:
+            try:
+                extraction = await self._extract_item(item)
+                result = convert_item_llm(
+                    item,
+                    extracted_fields=extraction.fields,
+                    llm_model=self._llm_settings.llm_model,
+                    duration_ms=extraction.duration_ms,
+                )
+            except Exception as e:
+                logger.warning(
+                    "LLM extraction failed for '%s', falling back to keyword: %s",
+                    item["title"], e,
+                )
+                cls = classify(item["title"])
+                item["impact_level"] = cls.impact_level
+                item["finance_category"] = cls.finance_category
+                item["confidence"] = cls.confidence
+                result = convert_item(item)
+
+            json_path = save_extraction(result, self._output_dir)
+            self.catalog.insert(result, json_path)
+            stored += 1
+        return stored
+
+    async def _extract_item(self, item: dict):
+        """Run LLM extraction on a single news item."""
+        markdown = _compose_markdown(item)
+        return await run_extraction(
+            self._llm_settings,
+            file_path=Path(item["link"]),
+            markdown=markdown,
+        )
 
     def bootstrap(self) -> dict:
         """Initial full fetch of all feeds across all categories."""
@@ -289,14 +366,18 @@ class NewsStream:
 
     def describe(self) -> dict:
         """Return module metadata and stats."""
-        return {
+        info = {
             "name": "NewsStream",
             "version": "0.1.0",
             "total_feeds": self.registry.feed_count(),
             "categories": self.registry.list_categories(),
             "stored_items": self.catalog.count(source="news"),
             "summarizer_available": self.summarizer.available,
+            "llm_extraction_available": self._llm_settings is not None,
         }
+        if self._llm_settings:
+            info["llm_model"] = self._llm_settings.llm_model
+        return info
 
     def prune(self, days: int = 90) -> int:
         """Delete news items older than N days from catalog + JSON files."""

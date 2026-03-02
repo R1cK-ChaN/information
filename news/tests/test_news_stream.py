@@ -1,6 +1,8 @@
 """Tests for the NewsStream orchestrator."""
 
 import json
+from dataclasses import dataclass, field
+from unittest.mock import patch, AsyncMock
 
 import pytest
 import httpx
@@ -183,3 +185,82 @@ class TestAdmin:
     def test_prune(self, ns):
         deleted = ns.prune(days=90)
         assert deleted == 0  # nothing to prune
+
+
+# ---------------------------------------------------------------------------
+# LLM extraction path
+# ---------------------------------------------------------------------------
+
+@dataclass
+class _FakeExtractionResult:
+    fields: dict = field(default_factory=lambda: {
+        "title": "Fed Emergency Rate Cut",
+        "institution": "Federal Reserve",
+        "impact_level": "critical",
+        "confidence": 0.95,
+        "asset_class": "Macro",
+        "sector": "Monetary Policy",
+        "country": "US",
+        "market": "Global Markets",
+        "document_type": "News Article",
+        "event_type": "Policy Statement",
+        "language": "en",
+    })
+    duration_ms: int = 250
+
+
+class TestRefreshLLM:
+    """Test the LLM extraction path in refresh()."""
+
+    def _enable_llm(self, ns):
+        """Simulate LLM being available by setting _llm_settings to a mock."""
+        @dataclass
+        class FakeSettings:
+            llm_model: str = "openai/gpt-4o-mini"
+        ns._llm_settings = FakeSettings()
+
+    @respx.mock
+    def test_llm_path_stores_with_llm_provider(self, ns):
+        respx.route().mock(return_value=httpx.Response(200, text=SAMPLE_RSS))
+        self._enable_llm(ns)
+
+        fake_result = _FakeExtractionResult()
+        mock_extract = AsyncMock(return_value=fake_result)
+
+        with patch.object(ns, "_extract_item", mock_extract):
+            result = ns.refresh("markets")
+
+        assert result["stored"] > 0
+        json_files = list(ns._output_dir.glob("*/*.json"))
+        assert len(json_files) > 0
+        data = json.loads(json_files[0].read_text())
+        assert data["extraction_info"]["provider"] == "llm"
+        assert data["extraction_info"]["llm_model"] == "openai/gpt-4o-mini"
+
+    @respx.mock
+    def test_llm_failure_falls_back_to_keyword(self, ns):
+        respx.route().mock(return_value=httpx.Response(200, text=SAMPLE_RSS))
+        self._enable_llm(ns)
+
+        mock_extract = AsyncMock(side_effect=RuntimeError("LLM API timeout"))
+
+        with patch.object(ns, "_extract_item", mock_extract):
+            result = ns.refresh("markets")
+
+        assert result["stored"] > 0
+        json_files = list(ns._output_dir.glob("*/*.json"))
+        assert len(json_files) > 0
+        data = json.loads(json_files[0].read_text())
+        assert data["extraction_info"]["provider"] == "news_classifier"
+
+    def test_describe_shows_llm_info(self, ns):
+        self._enable_llm(ns)
+        info = ns.describe()
+        assert info["llm_extraction_available"] is True
+        assert info["llm_model"] == "openai/gpt-4o-mini"
+
+    def test_describe_no_llm(self, ns):
+        ns._llm_settings = None
+        info = ns.describe()
+        assert info["llm_extraction_available"] is False
+        assert "llm_model" not in info
