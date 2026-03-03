@@ -45,6 +45,8 @@ FEEDS: list[FeedInfo] = [
     FeedInfo("Gold & Metals", _gnews('("gold+price"+OR+"silver+price"+OR+"copper+futures"+OR+"platinum+futures"+OR+"precious+metals")+-site:meyka.com', "2d"), "commodities"),
     FeedInfo("Agriculture", _gnews("(wheat+OR+corn+OR+soybeans+OR+coffee+OR+sugar)+price+OR+commodity", "3d"), "commodities"),
     FeedInfo("Commodity Trading", _gnews('("commodity+trading"+OR+"futures+market"+OR+CME+OR+NYMEX+OR+COMEX)', "2d"), "commodities"),
+    FeedInfo("Uranium & Nuclear", _gnews("uranium+OR+%22nuclear+energy%22+price+OR+market+OR+supply", "3d"), "commodities"),
+    FeedInfo("Lithium & Battery Metals", _gnews("lithium+OR+cobalt+OR+nickel+%22battery%22+price+OR+supply+OR+EV", "3d"), "commodities"),
 
     # ── crypto (5) ────────────────────────────────────────────
     FeedInfo("CoinDesk", "https://www.coindesk.com/arc/outboundfeeds/rss/", "crypto"),
@@ -62,6 +64,8 @@ FEEDS: list[FeedInfo] = [
     FeedInfo("BoE Watch", _gnews('("Bank+of+England"+OR+BoE)+(rate+OR+sterling+OR+inflation+OR+"monetary+policy")+-crypto+-bitcoin', "3d"), "centralbanks"),
     FeedInfo("PBoC Watch", _gnews('("People%27s+Bank+of+China"+OR+PBoC+OR+PBOC)', "7d"), "centralbanks"),
     FeedInfo("Global Central Banks", _gnews('("rate+hike"+OR+"rate+cut"+OR+"interest+rate+decision")+central+bank', "3d"), "centralbanks"),
+    FeedInfo("RBI India", _gnews('%22Reserve+Bank+of+India%22+OR+RBI+rate+OR+rupee+OR+%22monetary+policy%22', "3d"), "centralbanks"),
+    FeedInfo("Central Bank Balance Sheets", _gnews('%22quantitative+easing%22+OR+%22quantitative+tightening%22+OR+%22balance+sheet%22+%22central+bank%22', "7d"), "centralbanks"),
 
     # ── economic (5) ──────────────────────────────────────────
     FeedInfo("WSJ Economy", "https://feeds.content.dowjones.io/public/rss/socialeconomyfeed", "economic"),
@@ -122,6 +126,9 @@ FEEDS: list[FeedInfo] = [
     FeedInfo("AEI", "https://www.aei.org/feed/", "thinktanks"),
     FeedInfo("CSIS", _gnews("site:csis.org", "7d"), "thinktanks"),
     FeedInfo("War on the Rocks", "https://warontherocks.com/feed", "thinktanks"),
+    FeedInfo("Brookings", "https://www.brookings.edu/feed/", "thinktanks"),
+    FeedInfo("Carnegie", "https://carnegieendowment.org/rss/solr/?lang=en", "thinktanks"),
+    FeedInfo("International Crisis Group", _gnews("site:crisisgroup.org", "7d"), "thinktanks"),
 
     # ── government (2) ────────────────────────────────────────
     FeedInfo("Federal Reserve (Gov)", "https://www.federalreserve.gov/feeds/press_all.xml", "government"),
@@ -141,6 +148,71 @@ FEEDS: list[FeedInfo] = [
     FeedInfo("Economist Leaders", "https://www.economist.com/leaders/rss.xml", "global"),
     FeedInfo("Economist Finance", "https://www.economist.com/finance-and-economics/rss.xml", "global"),
     FeedInfo("Forbes Business", "https://www.forbes.com/business/feed", "global"),
+
+    # ── energy (5) ──────────────────────────────────────────────
+    FeedInfo("IEA News", "https://www.iea.org/news/rss", "energy"),
+    FeedInfo("OPEC News", _gnews("site:opec.org", "3d"), "energy"),
+    FeedInfo("LNG & Gas", _gnews('LNG+OR+%22liquefied+natural+gas%22+OR+%22natural+gas%22+supply+OR+price', "2d"), "energy"),
+    FeedInfo("Energy Intelligence", _gnews('%22energy+market%22+OR+%22power+grid%22+OR+%22energy+crisis%22+OR+%22energy+transition%22', "2d"), "energy"),
+    FeedInfo("Renewable Energy", _gnews('%22renewable+energy%22+OR+%22solar+energy%22+OR+%22wind+power%22+investment+OR+market', "3d"), "energy"),
+
+    # ── shipping (4) ────────────────────────────────────────────
+    FeedInfo("gCaptain", "https://gcaptain.com/feed/", "shipping"),
+    FeedInfo("Shipping Watch", _gnews('%22Baltic+Dry+Index%22+OR+%22container+shipping%22+OR+%22freight+rate%22', "2d"), "shipping"),
+    FeedInfo("Port & Logistics", _gnews('%22port+congestion%22+OR+%22supply+chain+disruption%22+OR+%22shipping+delay%22', "2d"), "shipping"),
+    FeedInfo("Splash247", _gnews("site:splash247.com+shipping", "3d"), "shipping"),
+
+    # ── emergingmarkets (8) ─────────────────────────────────────
+    FeedInfo("India Markets", _gnews('India+%22stock+market%22+OR+Sensex+OR+Nifty+OR+rupee', "2d"), "emergingmarkets"),
+    FeedInfo("ASEAN Markets", _gnews("ASEAN+OR+Vietnam+OR+Thailand+OR+Indonesia+stock+OR+market+OR+economy", "2d"), "emergingmarkets"),
+    FeedInfo("Brazil & LatAm", _gnews('Brazil+OR+Mexico+%22stock+market%22+OR+Bovespa+OR+peso+OR+real+economy', "2d"), "emergingmarkets"),
+    FeedInfo("Middle East Markets", _gnews('Saudi+OR+UAE+OR+%22Gulf%22+stock+OR+market+OR+%22sovereign+wealth%22', "2d"), "emergingmarkets"),
+    FeedInfo("Africa Markets", _gnews('Africa+%22stock+market%22+OR+%22sovereign+bond%22+OR+%22frontier+market%22', "3d"), "emergingmarkets"),
+    FeedInfo("Turkey & Eastern Europe", _gnews("Turkey+OR+Poland+lira+OR+economy+OR+%22emerging+market%22", "3d"), "emergingmarkets"),
+    FeedInfo("EM Currency Crisis", _gnews('%22emerging+market%22+currency+OR+crisis+OR+devaluation+OR+%22capital+outflow%22', "2d"), "emergingmarkets"),
+    FeedInfo("EM Sovereign Debt", _gnews('%22sovereign+debt%22+OR+%22sovereign+bond%22+OR+%22debt+restructuring%22+emerging', "3d"), "emergingmarkets"),
+
+    # ── energy_geopol (4) ───────────────────────────────────────
+    FeedInfo("Sanctions & Export Controls", _gnews("sanctions+OR+%22export+controls%22+OR+OFAC+financial+OR+energy", "2d"), "energy_geopol"),
+    FeedInfo("Middle East Oil Risk", _gnews('%22Middle+East%22+OR+Iran+OR+%22Red+Sea%22+oil+OR+tanker+OR+shipping', "2d"), "energy_geopol"),
+    FeedInfo("Russia Energy", _gnews("Russia+OR+Ukraine+energy+OR+gas+OR+oil+OR+pipeline+sanctions", "2d"), "energy_geopol"),
+    FeedInfo("Supply Chain Geopol", _gnews('%22supply+chain%22+risk+OR+disruption+geopolitical+OR+war+OR+conflict', "2d"), "energy_geopol"),
+
+    # ── debt (5) ────────────────────────────────────────────────
+    FeedInfo("Credit Ratings", _gnews('%22credit+rating%22+OR+%22Moody%27s%22+OR+%22S%26P+Global%22+OR+Fitch+downgrade+OR+upgrade', "3d"), "debt"),
+    FeedInfo("High Yield & Distress", _gnews('%22high+yield%22+OR+%22junk+bond%22+OR+%22distressed+debt%22+OR+%22credit+spread%22', "3d"), "debt"),
+    FeedInfo("Sovereign Default", _gnews('%22sovereign+default%22+OR+%22debt+crisis%22+OR+%22debt+ceiling%22+OR+IMF+bailout', "3d"), "debt"),
+    FeedInfo("Corporate Debt", _gnews('%22corporate+bond%22+issuance+OR+refinancing+OR+%22leveraged+loan%22', "3d"), "debt"),
+    FeedInfo("World Bank", "https://www.worldbank.org/en/news/rss.xml", "debt"),
+
+    # ── labor (4) ───────────────────────────────────────────────
+    FeedInfo("Wage Inflation", _gnews('%22wage+growth%22+OR+%22wage+inflation%22+OR+%22labor+cost%22+OR+%22minimum+wage%22', "3d"), "labor"),
+    FeedInfo("Labor Disputes", _gnews("strike+OR+%22labor+dispute%22+OR+%22union+negotiation%22+OR+walkout+industry", "3d"), "labor"),
+    FeedInfo("Jobless Claims", _gnews('%22jobless+claims%22+OR+%22unemployment+rate%22+OR+%22job+openings%22+OR+JOLTS', "2d"), "labor"),
+    FeedInfo("Layoffs & Restructuring", _gnews("layoffs+OR+%22mass+layoff%22+OR+restructuring+OR+%22job+cuts%22+tech+OR+finance", "2d"), "labor"),
+
+    # ── realestate (4) ──────────────────────────────────────────
+    FeedInfo("Commercial RE", _gnews('%22commercial+real+estate%22+OR+%22office+vacancy%22+OR+%22CRE+market%22', "3d"), "realestate"),
+    FeedInfo("REIT News", _gnews('REIT+OR+%22real+estate+investment+trust%22+earnings+OR+dividend', "3d"), "realestate"),
+    FeedInfo("Property Markets", _gnews('%22property+market%22+OR+%22home+prices%22+OR+%22real+estate%22+crash+OR+bubble', "3d"), "realestate"),
+    FeedInfo("Construction", _gnews('%22construction+spending%22+OR+%22building+permits%22+OR+%22housing+starts%22', "3d"), "realestate"),
+
+    # ── insurance (3) ───────────────────────────────────────────
+    FeedInfo("Insurance Industry", _gnews('%22insurance+industry%22+OR+%22insurance+company%22+earnings+OR+regulation', "3d"), "insurance"),
+    FeedInfo("Catastrophe Risk", _gnews('catastrophe+OR+%22natural+disaster%22+OR+hurricane+insurance+OR+%22insured+losses%22', "3d"), "insurance"),
+    FeedInfo("Reinsurance", _gnews('reinsurance+OR+%22Lloyd%27s+of+London%22+OR+%22Swiss+Re%22+OR+%22Munich+Re%22', "7d"), "insurance"),
+
+    # ── semiconductors (4) ──────────────────────────────────────
+    FeedInfo("Semiconductor Industry", _gnews('TSMC+OR+%22semiconductor%22+OR+%22chip+shortage%22+OR+foundry+OR+%22chip+industry%22', "2d"), "semiconductors"),
+    FeedInfo("AI & Compute", _gnews('%22AI+chip%22+OR+%22GPU%22+OR+Nvidia+OR+%22data+center%22+chip+OR+compute', "2d"), "semiconductors"),
+    FeedInfo("Semiconductor Policy", _gnews('%22CHIPS+Act%22+OR+%22semiconductor%22+subsidy+OR+%22chip+war%22+OR+%22export+control%22', "3d"), "semiconductors"),
+    FeedInfo("SemiEngineering", _gnews("site:semiengineering.com", "3d"), "semiconductors"),
+
+    # ── esg (4) ─────────────────────────────────────────────────
+    FeedInfo("Carbon Markets", _gnews('%22carbon+market%22+OR+%22carbon+credit%22+OR+%22emissions+trading%22+OR+ETS+price', "3d"), "esg"),
+    FeedInfo("ESG Regulation", _gnews('ESG+regulation+OR+%22sustainable+finance%22+OR+%22green+bond%22', "3d"), "esg"),
+    FeedInfo("Climate Risk Finance", _gnews('%22climate+risk%22+financial+OR+bank+OR+insurance+OR+%22stranded+assets%22', "3d"), "esg"),
+    FeedInfo("FAO Food Prices", "https://www.fao.org/news/rss-feed/en/", "esg"),
 ]
 
 # ── Category index ────────────────────────────────────────────
