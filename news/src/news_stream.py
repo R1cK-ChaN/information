@@ -16,6 +16,7 @@ from .registry import Registry, FeedInfo
 from .classifier import classify
 from .deduplicator import Deduplicator
 from .providers.rss import RSSProvider
+from .providers.telegram import TelegramProvider
 from .providers.summarizer import Summarizer
 from .article_fetcher import ArticleFetcher
 from .export import (
@@ -78,6 +79,13 @@ class NewsStream:
         self.rss = RSSProvider(
             timeout=rss_cfg.get("timeout_seconds", 15),
             max_items=rss_cfg.get("max_items_per_feed", 10),
+        )
+
+        # Telegram provider
+        tg_cfg = self.config["providers"].get("telegram", {})
+        self.telegram = TelegramProvider(
+            timeout=tg_cfg.get("timeout_seconds", 15),
+            max_items=tg_cfg.get("max_items_per_channel", 20),
         )
 
         # Summarizer (optional)
@@ -212,7 +220,12 @@ class NewsStream:
                 continue
 
             try:
-                raw_items = self.rss.fetch_with_retry(
+                provider = (
+                    self.telegram
+                    if feed.url.startswith("https://t.me/s/")
+                    else self.rss
+                )
+                raw_items = provider.fetch_with_retry(
                     feed.url,
                     feed_name=feed.name,
                     feed_category=feed.category,
@@ -452,6 +465,7 @@ class NewsStream:
     def close(self):
         """Close all connections."""
         self.rss.close()
+        self.telegram.close()
         self.article_fetcher.close()
         self.summarizer.close()
         self.sync_store.close()

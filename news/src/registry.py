@@ -15,6 +15,11 @@ def _gnews(query: str, when: str = "1d") -> str:
     return f"https://news.google.com/rss/search?q={query}+when:{when}&hl=en-US&gl=US&ceid=US:en"
 
 
+def _tg(channel: str) -> str:
+    """Build a Telegram public channel preview URL."""
+    return f"https://t.me/s/{channel}"
+
+
 # ── Feed definitions ──────────────────────────────────────────
 
 FEEDS: list[FeedInfo] = [
@@ -29,6 +34,8 @@ FEEDS: list[FeedInfo] = [
     FeedInfo("WSJ Markets", "https://feeds.content.dowjones.io/public/rss/RSSMarketsMain", "markets"),
     FeedInfo("BBC Business", "https://feeds.bbci.co.uk/news/business/rss.xml", "markets"),
     FeedInfo("Nikkei Asia", "https://asia.nikkei.com/rss/feed/nar", "markets"),
+    FeedInfo("TG Bloomberg", _tg("Bloomberg"), "markets"),
+    FeedInfo("TG Nikkei Asia", _tg("NikkeiAsia"), "markets"),
 
     # ── forex (3) ─────────────────────────────────────────────
     FeedInfo("Forex News", _gnews('("forex"+OR+"currency"+OR+"FX+market")+trading', "1d"), "forex"),
@@ -54,6 +61,8 @@ FEEDS: list[FeedInfo] = [
     FeedInfo("The Block", _gnews("site:theblock.co", "1d"), "crypto"),
     FeedInfo("Crypto News", _gnews('(bitcoin+OR+ethereum+OR+crypto+OR+"digital+assets")', "1d"), "crypto"),
     FeedInfo("DeFi News", _gnews('(DeFi+OR+"decentralized+finance"+OR+DEX+OR+"yield+farming")', "3d"), "crypto"),
+    FeedInfo("TG CoinTelegraph", _tg("CoinTelegraph"), "crypto"),
+    FeedInfo("TG Crypto", _tg("crypto"), "crypto"),
 
     # ── centralbanks (8) ──────────────────────────────────────
     FeedInfo("Federal Reserve", "https://www.federalreserve.gov/feeds/press_all.xml", "centralbanks"),
@@ -119,6 +128,11 @@ FEEDS: list[FeedInfo] = [
     FeedInfo("China Markets", _gnews('("Shanghai+composite"+OR+"Hang+Seng"+OR+"CSI+300"+OR+"A-shares"+OR+"H-shares")', "2d"), "china"),
     FeedInfo("China Tech", _gnews('(Alibaba+OR+Tencent+OR+BYD+OR+Huawei+OR+Xiaomi)+stock+OR+earnings+OR+regulation', "3d"), "china"),
     FeedInfo("China Policy", _gnews('("China+GDP"+OR+"China+PMI"+OR+"China+CPI"+OR+"China+stimulus"+OR+"NPC"+OR+"NDRC")', "3d"), "china"),
+    FeedInfo("TG Xinhua", _tg("XHNews"), "china"),
+    FeedInfo("TG SCMP", _tg("SCMPNews"), "china"),
+    FeedInfo("TG Jin10", _tg("jin10data"), "china"),
+    FeedInfo("TG Xinhua Reference", _tg("xhqcankao"), "china"),
+    FeedInfo("TG TNews365", _tg("tnews365"), "china"),
 
     # ── thinktanks (5) ────────────────────────────────────────
     FeedInfo("Foreign Policy", "https://foreignpolicy.com/feed/", "thinktanks"),
@@ -148,6 +162,7 @@ FEEDS: list[FeedInfo] = [
     FeedInfo("Economist Leaders", "https://www.economist.com/leaders/rss.xml", "global"),
     FeedInfo("Economist Finance", "https://www.economist.com/finance-and-economics/rss.xml", "global"),
     FeedInfo("Forbes Business", "https://www.forbes.com/business/feed", "global"),
+    FeedInfo("TG BBC World", _tg("BBCWorld"), "global"),
 
     # ── energy (5) ──────────────────────────────────────────────
     FeedInfo("IEA News", "https://www.iea.org/news/rss", "energy"),

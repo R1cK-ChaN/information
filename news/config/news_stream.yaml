@@ -7,6 +7,10 @@ providers:
     timeout_seconds: 15
     max_items_per_feed: 10
     enabled: true
+  telegram:
+    timeout_seconds: 15
+    max_items_per_channel: 20
+    enabled: true
   article_fetcher:
     timeout_seconds: 20
     max_content_chars: 15000
