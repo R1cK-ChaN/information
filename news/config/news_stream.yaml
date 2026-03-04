@@ -11,6 +11,11 @@ providers:
     timeout_seconds: 15
     max_items_per_channel: 20
     enabled: true
+    realtime:
+      enabled: false
+      batch_interval_seconds: 30
+      batch_size: 10
+      session_dir: "data/telegram_session"
   article_fetcher:
     timeout_seconds: 20
     max_content_chars: 15000

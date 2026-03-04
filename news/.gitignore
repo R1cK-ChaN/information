@@ -8,3 +8,4 @@ build/
 .env
 .pytest_cache/
 data/browser_profile/
+data/telegram_session/

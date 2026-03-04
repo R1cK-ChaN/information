@@ -18,7 +18,8 @@ RUN pip install --no-cache-dir -e /app/information/widgets
 
 # ── install news-stream ───────────────────────────────────────────────────────
 COPY information/news/ /app/information/news/
-RUN pip install --no-cache-dir -e /app/information/news
+RUN pip install --no-cache-dir -e /app/information/news \
+    && pip install --no-cache-dir telethon>=1.34
 
 # ── copy the export script (called by refresher.py) ──────────────────────────
 COPY rag-service/scripts/export_information_layer.py \
@@ -29,7 +30,8 @@ RUN mkdir -p \
     /app/information/output \
     /app/information/6_information_layer/news \
     /app/information/6_information_layer/gov_report \
-    /app/information/news/data
+    /app/information/news/data \
+    /app/information/news/data/telegram_session
 
 # ── runtime env defaults (all overridable via docker-compose environment:) ───
 ENV CATALOG_PATH=/app/information/output/catalog.db

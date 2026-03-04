@@ -194,10 +194,20 @@ class NewsStream:
 
     # ── Ingestion ──────────────────────────────────────────────
 
-    def refresh(self, category: str | None = None) -> dict:
+    def refresh(
+        self,
+        category: str | None = None,
+        skip_telegram: bool = False,
+    ) -> dict:
         """Fetch, classify, dedup, and store news from feeds.
 
         Uses LLM extraction when available, falls back to keyword classifier.
+
+        Parameters
+        ----------
+        skip_telegram : bool
+            When True, skip feeds whose URL starts with ``https://t.me/s/``
+            (used when Telegram real-time listener is active).
         """
         feeds = self.registry.list_feeds(category)
         if not feeds:
@@ -216,6 +226,8 @@ class NewsStream:
         pending_items: list[tuple[FeedInfo, dict]] = []
 
         for feed in feeds:
+            if skip_telegram and feed.url.startswith("https://t.me/s/"):
+                continue
             if self._is_in_cooldown(feed.name):
                 continue
 
@@ -280,6 +292,79 @@ class NewsStream:
         results["stored"] = stored
 
         return results
+
+    def process_realtime_items(self, raw_items: list[dict]) -> int:
+        """Process pre-fetched items through the dedup → fetch → classify → store pipeline.
+
+        Used by the Telegram real-time listener to process batched items
+        without re-fetching from the channel.
+
+        Returns the number of items stored.
+        """
+        if not raw_items:
+            return 0
+
+        # Seed deduplicator
+        dedup = Deduplicator(threshold=self._dedup_threshold)
+        recent_titles = self.catalog.get_recent_titles(
+            source="news", hours=self._dedup_lookback,
+        )
+        dedup.seed(recent_titles)
+
+        # Dedup check
+        pending_items: list[tuple[FeedInfo, dict]] = []
+        duplicates = 0
+
+        for item in raw_items:
+            if dedup.is_duplicate(item["title"]):
+                duplicates += 1
+                continue
+
+            sha = _news_sha256(item["link"])
+            if self.catalog.has(sha):
+                duplicates += 1
+                continue
+
+            # Use a synthetic FeedInfo for pipeline compatibility
+            feed = FeedInfo(
+                name=item.get("source", "telegram_rt"),
+                url="",
+                category=item.get("feed_category", ""),
+            )
+            pending_items.append((feed, item))
+
+        if not pending_items:
+            logger.debug("Real-time batch: %d items, all duplicates", len(raw_items))
+            return 0
+
+        # Fetch full article content
+        fetched_count = 0
+        for _feed, item in pending_items:
+            rss_desc = item.get("description", "")
+            result = self.article_fetcher.fetch_article(item["link"], rss_desc)
+            if result.fetched:
+                item["description"] = result.content
+                fetched_count += 1
+            time.sleep(0.5)
+
+        if fetched_count:
+            logger.info(
+                "Real-time article fetcher: enriched %d / %d items",
+                fetched_count, len(pending_items),
+            )
+
+        # Classify and store
+        results: dict = {"fetched": 0, "stored": 0, "duplicates": duplicates, "errors": []}
+        if self._llm_settings:
+            stored = asyncio.run(self._process_items_llm(pending_items, results))
+        else:
+            stored = self._process_items_keyword(pending_items, results)
+
+        logger.info(
+            "Real-time batch: %d received, %d stored, %d duplicates",
+            len(raw_items), stored, duplicates,
+        )
+        return stored
 
     def _process_items_keyword(
         self,
