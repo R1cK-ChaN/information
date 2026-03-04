@@ -188,3 +188,93 @@ NewsStream(config_path=None)
 .prune(days=90) -> int
 .close()
 ```
+
+---
+
+## Deployment
+
+The `refresher.py` script runs the full pipeline continuously as a Docker service.
+Agents do **not** query the catalog directly — they query the RAG service, which indexes
+the markdown files produced by this pipeline.
+
+### Full pipeline (every 15 min)
+
+```
+[130+ RSS / Telegram feeds]
+        │
+        ▼  refresh()
+information/output/<sha[:4]>/<sha>.json    ← structured extraction per article
+information/output/catalog.db             ← SQLite index (dedup + querying)
+        │
+        ▼  export_information_layer.py
+information/6_information_layer/news/<sha[:12]>.md   ← YAML frontmatter + markdown
+        │
+        ▼  POST /admin/collections/sync
+RAG service (Milvus)                      ← agents query from here
+```
+
+Export and RAG sync only fire when `stored > 0` — idle cycles are free.
+RAG sync failures are non-fatal and retried on the next cycle.
+
+### Docker setup
+
+```bash
+# 1. Copy and fill in keys
+cp news/.env.example news/.env
+# Edit news/.env — set RAG_API_KEY if your RAG service has auth on
+
+# 2. Build and start (from information/)
+docker compose up -d --build
+
+# 3. Follow logs
+docker compose logs -f news-refresher
+```
+
+Expected log output after the bootstrap run:
+
+```
+Bootstrap done — fetched=1300  stored=120  duplicates=0  errors=4
+Export output: Export complete: 120 news, 0 gov_report, 0 skipped
+RAG sync triggered: {"status": "ok", ...}
+Sleeping 900s until next refresh...
+```
+
+### Environment variables (`news/.env`)
+
+| Variable | Default | Description |
+|---|---|---|
+| `REFRESH_INTERVAL_SECONDS` | `900` | Polling interval in seconds (15 min) |
+| `RAG_SERVICE_URL` | `http://host.docker.internal:8000` | RAG service sync endpoint base URL |
+| `RAG_API_KEY` | _(empty)_ | `X-API-Key` header if RAG auth is enabled |
+| `GROQ_API_KEY` | _(empty)_ | Groq key for optional headline summarization |
+| `LLM_API_KEY` | _(empty)_ | LLM key for optional structured extraction |
+| `LLM_BASE_URL` | `https://openrouter.ai/api/v1` | LLM provider base URL |
+| `LLM_MODEL` | `openai/gpt-4o-mini` | Model for structured extraction |
+
+`CATALOG_PATH`, `INFO_LAYER_PATH`, and `EXPORT_SCRIPT` are set automatically by
+`docker-compose.yml` to match the volume mounts — do not override unless running outside Docker.
+
+### Volume mounts
+
+| Host path | Container path | Purpose |
+|---|---|---|
+| `information/output/` | `/app/information/output/` | JSON files + catalog.db |
+| `information/6_information_layer/` | `/app/information/6_information_layer/` | Exported .md for RAG |
+| `news_sync_data` (named) | `/app/information/news/data/` | Feed polling state (persisted) |
+
+The `information/6_information_layer/` directory is mounted read-only by the RAG service
+container (`rag-service/docker-compose.yml` → `RAG_INFO_LAYER_PATH`). Both services point
+at the same host directory — the refresher writes, the RAG container reads.
+
+### Running locally (no Docker)
+
+```bash
+cd information/news
+pip install -e ../widgets -e .
+
+# Optional: set env vars
+export RAG_SERVICE_URL=http://localhost:8000
+export RAG_API_KEY=your-key
+
+python refresher.py
+```

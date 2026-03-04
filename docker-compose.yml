@@ -1,0 +1,64 @@
+# News feed refresher — continuous ingestion into catalog + RAG knowledge base.
+#
+# Pipeline every REFRESH_INTERVAL_SECONDS:
+#   1. news/refresh()              → information/output/ (JSON + catalog.db)
+#   2. export_information_layer.py → information/6_information_layer/news/*.md
+#   3. POST /admin/collections/sync → RAG service (incremental Milvus index)
+#
+# Usage:
+#   docker compose up -d --build
+#   docker compose logs -f news-refresher
+#   docker compose down
+
+services:
+  news-refresher:
+    build:
+      # Context is the workspace root so both information/ and rag-service/ are reachable.
+      context: ..
+      dockerfile: information/news/Dockerfile
+    container_name: news-refresher
+    restart: unless-stopped
+
+    env_file:
+      # Place GROQ_API_KEY, LLM_API_KEY, RAG_API_KEY here (gitignored).
+      # required: false so the container starts even without a .env file.
+      - path: news/.env
+        required: false
+
+    environment:
+      # How often to poll all feeds (seconds). 900 = 15 min.
+      - REFRESH_INTERVAL_SECONDS=900
+
+      # RAG service URL. Defaults to host.docker.internal so this container
+      # can reach rag-service running on the host (or another compose stack).
+      # Override in news/.env: RAG_SERVICE_URL=http://your-rag-host:8000
+      - RAG_SERVICE_URL=${RAG_SERVICE_URL:-http://host.docker.internal:8000}
+
+      # Explicit paths (match the volume mounts below — do not change).
+      - CATALOG_PATH=/app/information/output/catalog.db
+      - INFO_LAYER_PATH=/app/information/6_information_layer
+      - EXPORT_SCRIPT=/app/rag-service/scripts/export_information_layer.py
+
+    extra_hosts:
+      # Lets host.docker.internal resolve on Linux (no-op on Mac/Windows).
+      - "host.docker.internal:host-gateway"
+
+    volumes:
+      # ── shared outputs ──────────────────────────────────────────────────────
+      # JSON extractions + catalog.db.
+      # The RAG export script reads from here.
+      - ./output:/app/information/output
+
+      # Exported .md files for RAG ingestion.
+      # The rag-service container mounts this same path read-only
+      # (see rag-service/docker-compose.yml: RAG_INFO_LAYER_PATH).
+      - ./6_information_layer:/app/information/6_information_layer
+
+      # ── persistent state ────────────────────────────────────────────────────
+      # Feed polling state (news_sync.db) and optional browser profile.
+      # Named volume so polling history survives container rebuilds.
+      - news_sync_data:/app/information/news/data
+
+volumes:
+  news_sync_data:
+    # Feed polling state persisted across container restarts and rebuilds.

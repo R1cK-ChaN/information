@@ -19,7 +19,7 @@ LLMs hallucinate. When an analyst agent needs to reason about CPI prints, FOMC d
 ## Data Flow
 
 ```
-Official Sources (BLS, Fed, NBS, PBOC, ...)
+Official Sources (BLS, Fed, NBS, PBOC, RSS feeds, Telegram, PDFs)
         │
         ▼
    ┌─────────┐     ┌────────────┐     ┌──────┐
@@ -37,11 +37,20 @@ Official Sources (BLS, Fed, NBS, PBOC, ...)
               └── <sha[:4]>/
                     └── <sha>.json  ← one JSON per document/article
                  │
-                 ▼
-        Analyst Agent (grounded reasoning)
+                 ▼  export_information_layer.py
+            6_information_layer/
+              ├── news/<sha[:12]>.md       ← YAML frontmatter + markdown body
+              └── gov_report/<sha[:12]>.md
+                 │
+                 ▼  POST /admin/collections/sync
+            RAG Service (Milvus)
+              └── kb_information collection  ← agents query from here
 ```
 
-All three packages write to a single `output/` directory at the repo root. Each item is deduplicated by SHA-256 and indexed in `output/catalog.db` for fast cross-package queries.
+All packages write to a single `output/` directory. Each item is deduplicated by SHA-256
+and indexed in `output/catalog.db`. The export script converts catalog items to markdown
+files in `6_information_layer/` which the RAG service indexes into Milvus — agents never
+touch the catalog directly.
 
 ## JSON Schema (shared by all packages)
 
@@ -75,3 +84,42 @@ doc-parser process /path/to/report.pdf
 # Check fetch history
 gov-report status
 ```
+
+---
+
+## Deployment: News Feed (Continuous)
+
+The `news/` package ships a `refresher.py` + `Dockerfile` that run the full pipeline
+continuously as a single Docker service. See [news/README.md](news/README.md#deployment)
+for full details.
+
+```bash
+# From information/
+cp news/.env.example news/.env   # fill in RAG_API_KEY etc.
+docker compose up -d --build
+docker compose logs -f news-refresher
+```
+
+### What the refresher does every 15 min
+
+| Step | Output |
+|---|---|
+| `news.refresh()` | `output/<sha>.json` + `output/catalog.db` |
+| `export_information_layer.py` | `6_information_layer/news/<sha[:12]>.md` |
+| `POST /admin/collections/sync` | Incremental Milvus index in RAG service |
+
+Only runs export + sync when new items are stored — idle cycles produce no I/O.
+
+### Shared volumes
+
+```
+information/
+├── output/                  ← JSON files + catalog.db  (written by refresher)
+└── 6_information_layer/
+    ├── news/                ← .md files for RAG        (written by refresher, read by RAG)
+    └── gov_report/          ← .md files for RAG        (written manually / future automation)
+```
+
+The RAG service mounts `6_information_layer/` read-only via `RAG_INFO_LAYER_PATH`
+(set in `rag-service/docker-compose.yml`). No code changes are needed in the RAG service —
+new `.md` files are picked up automatically on the next `/admin/collections/sync` call.
