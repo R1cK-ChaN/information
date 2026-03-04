@@ -107,7 +107,7 @@ def export_information_layer() -> bool:
 
 
 def trigger_rag_sync() -> None:
-    """POST /admin/collections/sync to trigger incremental Milvus indexing."""
+    """POST /admin/collections/sync and self-heal missing-manifest bootstrap cases."""
     headers: dict[str, str] = {}
     if RAG_API_KEY:
         headers["X-API-Key"] = RAG_API_KEY
@@ -116,8 +116,33 @@ def trigger_rag_sync() -> None:
         resp = httpx.post(
             f"{RAG_URL}/admin/collections/sync",
             headers=headers,
+            json={"auto_full_reindex_on_version_mismatch": True},
             timeout=120.0,
         )
+
+        if resp.status_code == 409:
+            try:
+                data = resp.json()
+            except Exception:
+                data = {}
+
+            if (
+                data.get("error_code") == "KB_SYNC_REQUIRES_FULL_REINDEX"
+                and data.get("reason") == "missing_manifest"
+            ):
+                log.info(
+                    "RAG sync requires full bootstrap reindex (missing manifest); triggering force_full_reindex"
+                )
+                full_resp = httpx.post(
+                    f"{RAG_URL}/admin/collections/sync",
+                    headers=headers,
+                    json={"force_full_reindex": True},
+                    timeout=600.0,
+                )
+                full_resp.raise_for_status()
+                log.info("RAG full reindex triggered: %s", full_resp.json())
+                return
+
         resp.raise_for_status()
         log.info("RAG sync triggered: %s", resp.json())
     except Exception as exc:
