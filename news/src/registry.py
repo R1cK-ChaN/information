@@ -24,6 +24,9 @@ def _tg(channel: str) -> str:
 
 FEEDS: list[FeedInfo] = [
     # ── markets (10) ──────────────────────────────────────────
+    FeedInfo("Reuters Business RSS", "https://www.rss.app/feeds/reuters.com/business", "markets"),
+    FeedInfo("Reuters Markets RSS", "https://www.rss.app/feeds/reuters.com/markets", "markets"),
+    FeedInfo("Investing.com RSS", "https://www.investing.com/rss/news.rss", "markets"),
     FeedInfo("CNBC", "https://www.cnbc.com/id/100003114/device/rss/rss.html", "markets"),
     FeedInfo("MarketWatch", _gnews("site:marketwatch.com+markets", "1d"), "markets"),
     FeedInfo("Yahoo Finance", "https://finance.yahoo.com/rss/topstories", "markets"),
@@ -58,6 +61,9 @@ FEEDS: list[FeedInfo] = [
     # ── crypto (5) ────────────────────────────────────────────
     FeedInfo("CoinDesk", "https://www.coindesk.com/arc/outboundfeeds/rss/", "crypto"),
     FeedInfo("Cointelegraph", "https://cointelegraph.com/rss", "crypto"),
+    FeedInfo("The Block RSS", "https://www.theblock.co/rss.xml", "crypto"),
+    FeedInfo("Decrypt", "https://decrypt.co/feed", "crypto"),
+    FeedInfo("DL News", "https://www.dlnews.com/arc/outboundfeeds/rss/", "crypto"),
     FeedInfo("The Block", _gnews("site:theblock.co", "1d"), "crypto"),
     FeedInfo("Crypto News", _gnews('(bitcoin+OR+ethereum+OR+crypto+OR+"digital+assets")', "1d"), "crypto"),
     FeedInfo("DeFi News", _gnews('(DeFi+OR+"decentralized+finance"+OR+DEX+OR+"yield+farming")', "3d"), "crypto"),
@@ -77,6 +83,10 @@ FEEDS: list[FeedInfo] = [
     FeedInfo("Central Bank Balance Sheets", _gnews('%22quantitative+easing%22+OR+%22quantitative+tightening%22+OR+%22balance+sheet%22+%22central+bank%22', "7d"), "centralbanks"),
 
     # ── economic (5) ──────────────────────────────────────────
+    FeedInfo("MarketWatch Top Stories", "https://feeds.marketwatch.com/marketwatch/topstories", "economic"),
+    FeedInfo("CNBC Economy", "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=20910258", "economic"),
+    FeedInfo("Bloomberg Macro", "https://news.google.com/rss/search?q=bloomberg+macro+economy&hl=en", "economic"),
+    FeedInfo("Financial Times Macro", "https://news.google.com/rss/search?q=financial+times+macro&hl=en", "economic"),
     FeedInfo("WSJ Economy", "https://feeds.content.dowjones.io/public/rss/socialeconomyfeed", "economic"),
     FeedInfo("IMF News", "https://www.imf.org/en/news/rss", "economic"),
     FeedInfo("Economic Data", _gnews('(CPI+OR+inflation+OR+GDP+OR+"jobs+report"+OR+"nonfarm+payrolls"+OR+PMI)', "2d"), "economic"),
@@ -110,6 +120,13 @@ FEEDS: list[FeedInfo] = [
     FeedInfo("Sovereign Wealth", _gnews('("sovereign+wealth+fund"+OR+"pension+fund"+OR+"institutional+investor")', "7d"), "institutional"),
 
     # ── analysis (4) ──────────────────────────────────────────
+    FeedInfo("Brookings Economic Studies", "https://www.brookings.edu/topic/economic-studies/feed/", "analysis"),
+    FeedInfo("Peterson Institute", "https://www.piie.com/blogs/realtime-economics/feed", "analysis"),
+    FeedInfo("NY Fed Liberty Street", "https://libertystreeteconomics.newyorkfed.org/feed/", "analysis"),
+    FeedInfo("SF Fed Research", "https://www.frbsf.org/research/feed/", "analysis"),
+    FeedInfo("FRED Blog", "https://fredblog.stlouisfed.org/feed/", "analysis"),
+    FeedInfo("Atlanta Fed Macroblog", "https://www.atlantafed.org/rss/macroblog", "analysis"),
+    FeedInfo("BIS Bulletin", "https://www.bis.org/doclist/bisbullrss.rss", "analysis"),
     FeedInfo("NBER Working Papers", "https://www.nber.org/rss/new.xml", "analysis"),
     FeedInfo("Market Outlook", _gnews('("stock+market+outlook"+OR+"Wall+Street+outlook"+OR+"stock+market+forecast"+OR+"bull+market"+OR+"bear+market")+-site:openpr.com', "3d"), "analysis"),
     FeedInfo("Risk & Volatility", _gnews('("S%26P+500"+volatility+OR+VIX+OR+CBOE+OR+"risk+off"+stocks+OR+"market+correction")+-site:marketsmojo.com', "3d"), "analysis"),
