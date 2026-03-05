@@ -43,11 +43,13 @@ FEEDS: list[FeedInfo] = [
     # ── forex (3) ─────────────────────────────────────────────
     FeedInfo("Forex News", _gnews('("forex"+OR+"currency"+OR+"FX+market")+trading', "1d"), "forex"),
     FeedInfo("Dollar Watch", _gnews('("dollar+index"+OR+DXY+OR+"US+dollar"+forex+OR+"euro+dollar"+trading)', "2d"), "forex"),
+    FeedInfo("GNews: US Dollar", "https://news.google.com/rss/search?q=US+dollar+DXY+forex&hl=en&gl=US", "forex"),
     FeedInfo("Central Bank Rates", _gnews('("central+bank"+rate+OR+"Fed+rate"+OR+"interest+rate+decision"+OR+"monetary+policy")+-crypto+-bitcoin', "2d"), "forex"),
 
     # ── bonds (3) ─────────────────────────────────────────────
     FeedInfo("Bond Market", _gnews('("bond+market"+OR+"treasury+yields"+OR+"bond+yields"+OR+"10-year+yield"+OR+"fixed+income")+-site:vietnambiz.vn+-site:vietstock.vn', "2d"), "bonds"),
     FeedInfo("Treasury Watch", _gnews('("US+Treasury"+OR+"Treasury+auction"+OR+"10-year+yield"+OR+"2-year+yield")', "2d"), "bonds"),
+    FeedInfo("GNews: Treasury Yields", "https://news.google.com/rss/search?q=treasury+yields+bond+market&hl=en&gl=US", "bonds"),
     FeedInfo("Corporate Bonds", _gnews('("corporate+bond"+OR+"high+yield+bond"+OR+"high+yield+debt"+OR+"investment+grade+bond"+OR+"credit+spread")', "3d"), "bonds"),
 
     # ── commodities (4) ───────────────────────────────────────
@@ -67,6 +69,8 @@ FEEDS: list[FeedInfo] = [
     FeedInfo("The Block", _gnews("site:theblock.co", "1d"), "crypto"),
     FeedInfo("Crypto News", _gnews('(bitcoin+OR+ethereum+OR+crypto+OR+"digital+assets")', "1d"), "crypto"),
     FeedInfo("DeFi News", _gnews('(DeFi+OR+"decentralized+finance"+OR+DEX+OR+"yield+farming")', "3d"), "crypto"),
+    FeedInfo("GNews: BTC Macro", "https://news.google.com/rss/search?q=bitcoin+macro+institutional&hl=en&gl=US", "crypto"),
+    FeedInfo("GNews: Stablecoin", "https://news.google.com/rss/search?q=stablecoin+USDT+USDC+tether&hl=en&gl=US", "crypto"),
     FeedInfo("TG CoinTelegraph", _tg("CoinTelegraph"), "crypto"),
     FeedInfo("TG Crypto", _tg("crypto"), "crypto"),
 
@@ -81,6 +85,7 @@ FEEDS: list[FeedInfo] = [
     FeedInfo("Global Central Banks", _gnews('("rate+hike"+OR+"rate+cut"+OR+"interest+rate+decision")+central+bank', "3d"), "centralbanks"),
     FeedInfo("RBI India", _gnews('%22Reserve+Bank+of+India%22+OR+RBI+rate+OR+rupee+OR+%22monetary+policy%22', "3d"), "centralbanks"),
     FeedInfo("Central Bank Balance Sheets", _gnews('%22quantitative+easing%22+OR+%22quantitative+tightening%22+OR+%22balance+sheet%22+%22central+bank%22', "7d"), "centralbanks"),
+    FeedInfo("GNews: Fed Policy", "https://news.google.com/rss/search?q=federal+reserve+interest+rate&hl=en&gl=US", "centralbanks"),
 
     # ── economic (5) ──────────────────────────────────────────
     FeedInfo("MarketWatch Top Stories", "https://feeds.marketwatch.com/marketwatch/topstories", "economic"),
@@ -92,6 +97,10 @@ FEEDS: list[FeedInfo] = [
     FeedInfo("Economic Data", _gnews('(CPI+OR+inflation+OR+GDP+OR+"jobs+report"+OR+"nonfarm+payrolls"+OR+PMI)', "2d"), "economic"),
     FeedInfo("Trade & Tariffs", _gnews('(tariff+OR+"trade+war"+OR+"trade+deficit"+OR+sanctions)', "2d"), "economic"),
     FeedInfo("Housing Market", _gnews('("housing+market"+OR+"home+prices"+OR+"mortgage+rates"+OR+REIT)', "3d"), "economic"),
+    FeedInfo("GNews: Inflation", "https://news.google.com/rss/search?q=CPI+inflation+data&hl=en&gl=US", "economic"),
+    FeedInfo("GNews: Jobs Report", "https://news.google.com/rss/search?q=nonfarm+payrolls+jobs+report&hl=en&gl=US", "economic"),
+    FeedInfo("GNews: Recession Risk", "https://news.google.com/rss/search?q=recession+risk+economic+slowdown&hl=en&gl=US", "economic"),
+    FeedInfo("GNews: Tariffs", "https://news.google.com/rss/search?q=tariffs+trade+war+sanctions&hl=en&gl=US", "economic"),
 
     # ── ipo (3) ───────────────────────────────────────────────
     FeedInfo("IPO News", _gnews('(IPO+OR+"initial+public+offering"+OR+SPAC+OR+"direct+listing")', "3d"), "ipo"),
@@ -113,6 +122,7 @@ FEEDS: list[FeedInfo] = [
     FeedInfo("Financial Regulation", _gnews("(SEC+OR+CFTC+OR+FINRA+OR+FCA)+regulation+OR+enforcement", "3d"), "regulation"),
     FeedInfo("Banking Rules", _gnews('("Basel+III"+OR+"Basel+IV"+OR+"Basel+regulation"+OR+"Basel+accord"+OR+"capital+requirements"+bank+OR+"banking+regulation")', "7d"), "regulation"),
     FeedInfo("Crypto Regulation", _gnews('(crypto+regulation+OR+"digital+asset"+regulation+OR+"stablecoin"+regulation)', "7d"), "regulation"),
+    FeedInfo("GNews: Crypto Regulation", "https://news.google.com/rss/search?q=crypto+regulation+SEC+legislation&hl=en&gl=US", "regulation"),
 
     # ── institutional (3) ─────────────────────────────────────
     FeedInfo("Hedge Fund News", _gnews('("hedge+fund"+OR+"Bridgewater+Associates"+OR+"Citadel+LLC"+OR+"Renaissance+Technologies"+OR+"Two+Sigma"+OR+"DE+Shaw")', "7d"), "institutional"),
@@ -145,6 +155,7 @@ FEEDS: list[FeedInfo] = [
     FeedInfo("China Markets", _gnews('("Shanghai+composite"+OR+"Hang+Seng"+OR+"CSI+300"+OR+"A-shares"+OR+"H-shares")', "2d"), "china"),
     FeedInfo("China Tech", _gnews('(Alibaba+OR+Tencent+OR+BYD+OR+Huawei+OR+Xiaomi)+stock+OR+earnings+OR+regulation', "3d"), "china"),
     FeedInfo("China Policy", _gnews('("China+GDP"+OR+"China+PMI"+OR+"China+CPI"+OR+"China+stimulus"+OR+"NPC"+OR+"NDRC")', "3d"), "china"),
+    FeedInfo("GNews: China Economy", "https://news.google.com/rss/search?q=china+economy+PBOC&hl=en&gl=US", "china"),
     FeedInfo("TG Xinhua", _tg("XHNews"), "china"),
     FeedInfo("TG SCMP", _tg("SCMPNews"), "china"),
     FeedInfo("TG Jin10", _tg("jin10data"), "china"),
