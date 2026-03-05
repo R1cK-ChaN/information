@@ -57,6 +57,62 @@ RSS_FEEDS: dict[str, dict] = {
             "industrial production": "us_fed_ip",
         },
     },
+    "fed_press_all": {
+        "url": "https://www.federalreserve.gov/feeds/press_all.xml",
+        "keyword_map": {
+            "fomc statement": "us_fed_fomc_statement",
+            "federal funds": "us_fed_fomc_statement",
+            "minutes": "us_fed_fomc_minutes",
+            "beige book": "us_fed_beigebook",
+            "industrial production": "us_fed_ip",
+            "press release": "us_fed_press_all",
+        },
+    },
+    "fed_speeches": {
+        "url": "https://www.federalreserve.gov/feeds/speeches.xml",
+        "keyword_map": {
+            "speech": "us_fed_speeches",
+            "remarks": "us_fed_speeches",
+            "address": "us_fed_speeches",
+            "statement": "us_fed_speeches",
+        },
+    },
+    "fed_testimony": {
+        "url": "https://www.federalreserve.gov/feeds/testimony.xml",
+        "keyword_map": {
+            "testimony": "us_fed_testimony",
+            "before the": "us_fed_testimony",
+            "congress": "us_fed_testimony",
+            "senate": "us_fed_testimony",
+            "house": "us_fed_testimony",
+        },
+    },
+    "ecb_press": {
+        "url": "https://www.ecb.europa.eu/rss/press.html",
+        "keyword_map": {
+            "press release": "ecb_press",
+            "decision": "ecb_press",
+            "monetary policy": "ecb_press",
+            "interest rate": "ecb_press",
+        },
+    },
+    "ecb_speeches": {
+        "url": "https://www.ecb.europa.eu/rss/speeches.html",
+        "keyword_map": {
+            "speech": "ecb_speeches",
+            "remarks": "ecb_speeches",
+            "address": "ecb_speeches",
+            "interview": "ecb_speeches",
+        },
+    },
+    "ecb_working_papers": {
+        "url": "https://www.ecb.europa.eu/rss/wppub.html",
+        "keyword_map": {
+            "working paper": "ecb_working_papers",
+            "occasional paper": "ecb_working_papers",
+            "discussion paper": "ecb_working_papers",
+        },
+    },
     "census_economic": {
         "url": "https://www.census.gov/economic-indicators/indicator.xml",
         "keyword_map": {
