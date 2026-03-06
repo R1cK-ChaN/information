@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>News Stream</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #08080a;
+    --surface:   #0f0f12;
+    --surface2:  #16161b;
+    --surface3:  #1c1c22;
+    --border:    #1e1e28;
+    --border-hl: #2c2c3a;
+    --text:      #e4e2df;
+    --text-sec:  #a8a4a0;
+    --text-dim:  #706c68;
+    --text-mute: #484448;
+    --accent:    #c8a96e;
+    --accent-dim:#907840;
+    --accent-bg: rgba(200,169,110,.06);
+    --critical:  #d4645a;
+    --critical-bg:rgba(212,100,90,.08);
+    --high:      #d4945a;
+    --high-bg:   rgba(212,148,90,.08);
+    --medium:    #c8b850;
+    --medium-bg: rgba(200,184,80,.06);
+    --low:       #5a8ec4;
+    --low-bg:    rgba(90,142,196,.06);
+    --info-c:    #6a6878;
+    --info-bg:   rgba(106,104,120,.06);
+    --green:     #5aaa6e;
+    --red:       #c45050;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── header ──────────────────────────────────────────── */
+  header {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(8,8,10,.8);
+    backdrop-filter: blur(24px) saturate(1.2);
+    -webkit-backdrop-filter: blur(24px) saturate(1.2);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 28px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .logo {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 20px; font-weight: 500; color: var(--accent);
+    letter-spacing: .3px;
+  }
+  .logo-sub {
+    font-family: 'Inter', sans-serif; font-weight: 300;
+    font-size: 11px; color: var(--text-dim); margin-left: 10px;
+    letter-spacing: 2px; text-transform: uppercase;
+    position: relative; top: -1px;
+  }
+  .header-right { display: flex; align-items: center; gap: 16px; }
+  .status {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 10px; color: var(--text-dim); letter-spacing: 1.5px;
+    text-transform: uppercase; font-weight: 500;
+  }
+  .status-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--text-mute); transition: all .5s;
+  }
+  .status-dot.live {
+    background: var(--green);
+    box-shadow: 0 0 6px rgba(90,170,110,.4), 0 0 16px rgba(90,170,110,.15);
+    animation: pulse 3s ease-in-out infinite;
+  }
+  .status-dot.error { background: var(--red); }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .5; }
+  }
+  .stat-pills { display: flex; gap: 8px; }
+  .stat-pill {
+    font-size: 10px; padding: 3px 10px; border-radius: 20px;
+    background: var(--surface2); color: var(--text-dim);
+    border: 1px solid var(--border); letter-spacing: .3px;
+  }
+  .stat-pill strong { color: var(--text-sec); font-weight: 500; }
+
+  /* ── toolbar ─────────────────────────────────────────── */
+  .toolbar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 28px;
+    display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+  }
+  .chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11px; padding: 5px 12px; border-radius: 20px;
+    background: var(--surface2); color: var(--text-dim);
+    border: 1px solid var(--border); cursor: pointer;
+    transition: all .2s; user-select: none; font-family: inherit;
+  }
+  .chip:hover { border-color: var(--border-hl); color: var(--text-sec); }
+  .chip.active { border-color: var(--accent-dim); color: var(--accent); background: var(--accent-bg); }
+  .chip select {
+    background: none; border: none; color: inherit;
+    font: inherit; cursor: pointer; outline: none;
+    padding: 0; -webkit-appearance: none; appearance: none;
+  }
+  .chip select option { background: var(--surface2); color: var(--text-sec); }
+  .chip-label { font-size: 9px; text-transform: uppercase; letter-spacing: .8px; color: var(--text-mute); }
+  .toolbar-sep { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
+  .btn-reset {
+    font: inherit; font-size: 10px; padding: 5px 12px; border-radius: 20px;
+    background: none; border: 1px solid transparent; color: var(--text-mute);
+    cursor: pointer; letter-spacing: .5px; text-transform: uppercase;
+    transition: all .2s;
+  }
+  .btn-reset:hover { color: var(--text-dim); border-color: var(--border); }
+
+  /* ── layout ──────────────────────────────────────────── */
+  .container {
+    max-width: 900px; margin: 0 auto;
+    padding: 20px 28px 100px;
+  }
+  .empty-state {
+    text-align: center; padding: 100px 20px;
+    color: var(--text-mute);
+  }
+  .empty-state .empty-icon {
+    width: 48px; height: 48px; margin: 0 auto 16px;
+    border: 2px solid var(--border); border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; opacity: .4;
+  }
+  .empty-state p { font-size: 13px; letter-spacing: .3px; }
+  .loading-bar {
+    position: fixed; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    z-index: 200; animation: loading 1.5s ease-in-out infinite;
+    display: none;
+  }
+  .loading-bar.active { display: block; }
+  @keyframes loading {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+
+  /* ── card ─────────────────────────────────────────────── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    overflow: hidden;
+    transition: border-color .3s;
+  }
+  .card:hover { border-color: var(--border-hl); }
+  .card.new { animation: slideIn .35s ease-out; }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .card-impact {
+    width: 3px; position: absolute; top: 0; bottom: 0; left: 0;
+    border-radius: 8px 0 0 8px;
+  }
+  .card-inner {
+    padding: 16px 20px;
+    position: relative;
+  }
+
+  /* top row: source + time */
+  .card-top {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 6px;
+  }
+  .card-source {
+    font-size: 10px; font-weight: 600; letter-spacing: 1.2px;
+    text-transform: uppercase; color: var(--accent);
+  }
+  .card-time {
+    font-size: 10px; color: var(--text-mute); letter-spacing: .3px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* title */
+  .card-title {
+    font-size: 14px; font-weight: 500; line-height: 1.5;
+    color: var(--text); margin-bottom: 4px;
+  }
+  .card-title a {
+    color: inherit; text-decoration: none;
+    transition: color .2s;
+  }
+  .card-title a:hover { color: var(--accent); }
+
+  /* preview line under title */
+  .card-preview {
+    font-size: 12px; line-height: 1.6; color: var(--text-dim);
+    margin-bottom: 8px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* tags */
+  .card-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
+  .tag {
+    font-size: 9px; padding: 2px 7px; border-radius: 3px;
+    letter-spacing: .5px; text-transform: uppercase; font-weight: 500;
+    border: 1px solid var(--border);
+  }
+  .tag-impact { font-weight: 600; }
+  .tag-impact.critical { color: var(--critical); background: var(--critical-bg); border-color: rgba(212,100,90,.2); }
+  .tag-impact.high     { color: var(--high);     background: var(--high-bg);     border-color: rgba(212,148,90,.2); }
+  .tag-impact.medium   { color: var(--medium);   background: var(--medium-bg);   border-color: rgba(200,184,80,.15); }
+  .tag-impact.low      { color: var(--low);      background: var(--low-bg);      border-color: rgba(90,142,196,.15); }
+  .tag-impact.info     { color: var(--info-c);   background: var(--info-bg);     border-color: rgba(106,104,120,.15); }
+  .tag-meta { color: var(--text-dim); background: var(--surface2); }
+
+  .card-expand {
+    background: none; border: none; color: var(--text-mute);
+    font: inherit; font-size: 10px; cursor: pointer;
+    padding: 4px 0 0; letter-spacing: .5px; text-transform: uppercase;
+    transition: color .2s;
+  }
+  .card-expand:hover { color: var(--accent); }
+
+  /* ── reading overlay ─────────────────────────────────── */
+  .reader-overlay {
+    position: fixed; inset: 0; z-index: 500;
+    background: rgba(0,0,0,.7);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    opacity: 0; pointer-events: none;
+    transition: opacity .25s;
+  }
+  .reader-overlay.open { opacity: 1; pointer-events: auto; }
+
+  .reader-panel {
+    position: fixed; top: 0; right: 0; bottom: 0; z-index: 501;
+    width: min(680px, 90vw);
+    background: var(--bg);
+    border-left: 1px solid var(--border);
+    transform: translateX(100%);
+    transition: transform .3s cubic-bezier(.4,0,.2,1);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .reader-overlay.open .reader-panel { transform: translateX(0); }
+
+  .reader-header {
+    position: sticky; top: 0; z-index: 10;
+    background: rgba(8,8,10,.9);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .reader-source {
+    font-size: 10px; font-weight: 600; letter-spacing: 1.2px;
+    text-transform: uppercase; color: var(--accent);
+  }
+  .reader-close {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text-dim); cursor: pointer;
+    width: 32px; height: 32px; display: flex; align-items: center;
+    justify-content: center; font-size: 16px; transition: all .2s;
+  }
+  .reader-close:hover { border-color: var(--border-hl); color: var(--text); }
+
+  .reader-content {
+    padding: 28px 32px 60px;
+  }
+  .reader-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px; font-weight: 500; line-height: 1.4;
+    color: var(--text); margin-bottom: 12px;
+  }
+  .reader-title a { color: inherit; text-decoration: none; }
+  .reader-title a:hover { color: var(--accent); }
+  .reader-meta {
+    display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;
+  }
+  .reader-time {
+    font-size: 11px; color: var(--text-mute); margin-bottom: 20px;
+    font-variant-numeric: tabular-nums;
+  }
+  .reader-body {
+    font-size: 14px; line-height: 1.85; color: var(--text-sec);
+  }
+  .reader-body h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 19px; font-weight: 500; color: var(--text);
+    margin: 28px 0 10px; padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+  .reader-body h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: 17px; font-weight: 500; color: var(--text);
+    margin: 24px 0 8px;
+  }
+  .reader-body h3 {
+    font-size: 14px; font-weight: 600; color: var(--text);
+    margin: 20px 0 6px; letter-spacing: .3px;
+  }
+  .reader-body p { margin-bottom: 12px; }
+  .reader-body ul, .reader-body ol { margin: 8px 0 14px 20px; }
+  .reader-body li { margin-bottom: 5px; }
+  .reader-body li::marker { color: var(--accent-dim); }
+  .reader-body a { color: var(--accent); text-decoration: none; border-bottom: 1px solid rgba(200,169,110,.2); }
+  .reader-body a:hover { border-bottom-color: var(--accent); }
+  .reader-body img { max-width: 100%; border-radius: 6px; margin: 14px 0; }
+  .reader-body blockquote {
+    border-left: 3px solid var(--accent-dim); padding: 8px 16px;
+    background: var(--surface); border-radius: 0 6px 6px 0;
+    color: var(--text-dim); margin: 14px 0;
+    font-style: italic;
+  }
+  .reader-body strong { color: var(--text); }
+  .reader-body hr {
+    border: none; border-top: 1px solid var(--border);
+    margin: 20px 0;
+  }
+
+  /* ── scrollbar ───────────────────────────────────────── */
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--border-hl); }
+</style>
+</head>
+<body>
+
+<div class="loading-bar" id="loadingBar"></div>
+
+<header>
+  <div>
+    <span class="logo">News Stream</span>
+    <span class="logo-sub">Real-time Intelligence</span>
+  </div>
+  <div class="header-right">
+    <div class="stat-pills">
+      <div class="stat-pill">Displayed <strong id="statCount">0</strong></div>
+      <div class="stat-pill">Catalog <strong id="statCatalog">--</strong></div>
+    </div>
+    <div class="status">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">Connecting</span>
+    </div>
+  </div>
+</header>
+
+<div class="toolbar" id="toolbar">
+  <div class="chip" id="chipImpact">
+    <span class="chip-label">Impact</span>
+    <select id="fImpact">
+      <option value="">All</option>
+      <option value="critical">Critical</option>
+      <option value="high">High</option>
+      <option value="medium">Medium</option>
+      <option value="low">Low</option>
+      <option value="info">Info</option>
+    </select>
+  </div>
+  <div class="chip" id="chipMarket">
+    <span class="chip-label">Market</span>
+    <select id="fMarket">
+      <option value="">All</option>
+      <option value="Global Markets">Global</option>
+      <option value="FX">FX</option>
+      <option value="Commodities">Commodities</option>
+      <option value="Crypto">Crypto</option>
+    </select>
+  </div>
+  <div class="chip" id="chipAsset">
+    <span class="chip-label">Asset</span>
+    <select id="fAsset">
+      <option value="">All</option>
+      <option value="Macro">Macro</option>
+      <option value="Fixed Income">Fixed Income</option>
+      <option value="FX">FX</option>
+      <option value="Commodity">Commodity</option>
+      <option value="Crypto">Crypto</option>
+      <option value="Equity">Equity</option>
+    </select>
+  </div>
+  <div class="chip" id="chipSource">
+    <span class="chip-label">Source</span>
+    <select id="fSource">
+      <option value="">All</option>
+      <option value="TG Bloomberg">Bloomberg</option>
+      <option value="TG Jin10">Jin10</option>
+      <option value="TG Xinhua">Xinhua</option>
+      <option value="TG SCMP">SCMP</option>
+      <option value="TG Nikkei Asia">Nikkei</option>
+      <option value="TG CoinTelegraph">CoinTelegraph</option>
+      <option value="TG BBC World">BBC</option>
+      <option value="TG Crypto">Crypto</option>
+      <option value="TG Market News Feed">MarketFeed</option>
+      <option value="TG Finance Magnates">FinanceMag</option>
+      <option value="TG Xinhua Reference">Xinhua Ref</option>
+      <option value="TG TNews365">TNews365</option>
+    </select>
+  </div>
+  <div class="toolbar-sep"></div>
+  <button class="btn-reset" onclick="clearFilters()">Reset</button>
+</div>
+
+<div class="container" id="feed">
+  <div class="empty-state" id="emptyState">
+    <div class="empty-icon">&#9670;</div>
+    <p>Connecting to stream&hellip;</p>
+  </div>
+</div>
+
+<!-- reading panel -->
+<div class="reader-overlay" id="readerOverlay" onclick="closeReader(event)">
+  <div class="reader-panel" onclick="event.stopPropagation()">
+    <div class="reader-header">
+      <span class="reader-source" id="readerSource"></span>
+      <button class="reader-close" onclick="closeReader()">&times;</button>
+    </div>
+    <div class="reader-content">
+      <div class="reader-title" id="readerTitle"></div>
+      <div class="reader-meta" id="readerMeta"></div>
+      <div class="reader-time" id="readerTime"></div>
+      <div class="reader-body" id="readerBody"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = window.location.origin;
+const feed = document.getElementById('feed');
+const dot = document.getElementById('statusDot');
+const statusTxt = document.getElementById('statusText');
+const statCount = document.getElementById('statCount');
+const statCat = document.getElementById('statCatalog');
+const loadingBar = document.getElementById('loadingBar');
+
+let displayCount = 0;
+let evtSource = null;
+const seenSha = new Set();
+
+// ── markdown to html (lightweight) ──────────────
+function md(text) {
+  if (!text) return '';
+  // Strip the metadata header block (Source/Published/Category/Impact/Link lines)
+  text = text.replace(/^#[^\n]*\n+(\*\*[^\n]*\n)*\n*---\n*/s, '');
+  let h = text
+    .replace(/^---$/gm, '<hr>')
+    .replace(/### (.+)/g, '<h3>$1</h3>')
+    .replace(/## (.+)/g, '<h2>$1</h2>')
+    .replace(/# (.+)/g, '<h1>$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img alt="$1" src="$2" loading="lazy">')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/^\* (.+)/gm, '<li>$1</li>')
+    .replace(/^> (.+)/gm, '<blockquote>$1</blockquote>');
+  // Wrap consecutive <li> in <ul>
+  h = h.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>');
+  // Paragraphs
+  h = h.split(/\n{2,}/).map(p => {
+    p = p.trim();
+    if (!p || p.startsWith('<h') || p.startsWith('<ul') || p.startsWith('<blockquote') || p.startsWith('<img') || p.startsWith('<hr')) return p;
+    return `<p>${p}</p>`;
+  }).join('\n');
+  return h;
+}
+
+// ── extract plain text preview from markdown ────
+function preview(text, maxLen) {
+  if (!text) return '';
+  // Strip header block
+  text = text.replace(/^#[^\n]*\n+(\*\*[^\n]*\n)*\n*---\n*/s, '');
+  // Strip markdown syntax
+  let plain = text
+    .replace(/#+\s/g, '')
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\*(.+?)\*/g, '$1')
+    .replace(/!\[[^\]]*\]\([^)]+\)/g, '')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/^[\*\->]\s/gm, '')
+    .replace(/\n+/g, ' ')
+    .trim();
+  if (plain.length > maxLen) plain = plain.slice(0, maxLen) + '...';
+  return plain;
+}
+
+// ── extract actual published time from markdown header ──
+function extractPublishedTime(item) {
+  // 1. Try the markdown header "**Published:** 2026-03-05T04:58:30+00:00"
+  if (item.markdown) {
+    const m = item.markdown.match(/\*\*Published:\*\*\s*(\S+)/);
+    if (m && m[1].includes('T')) return m[1];
+  }
+  // 2. processed_at is a unix timestamp — always precise
+  if (item.processed_at && typeof item.processed_at === 'number') return item.processed_at;
+  // 3. publish_date is just "YYYY-MM-DD" — fallback
+  return item.publish_date || '';
+}
+
+// ── time formatting ─────────────────────────────
+function toDate(v) {
+  if (!v) return null;
+  if (typeof v === 'number') return new Date(v * 1000);
+  const d = new Date(v);
+  return isNaN(d) ? null : d;
+}
+
+function relTime(v) {
+  const d = toDate(v);
+  if (!d) return '';
+  const now = new Date();
+  const diff = (now - d) / 1000;
+  if (diff < 0) return 'just now';
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+  if (diff < 86400) {
+    const h = Math.floor(diff/3600);
+    const m = Math.floor((diff % 3600) / 60);
+    return m > 0 ? `${h}h ${m}m ago` : `${h}h ago`;
+  }
+  if (diff < 172800) return 'yesterday';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function fullTime(v) {
+  const d = toDate(v);
+  if (!d) return String(v || '');
+  return d.toLocaleString('en-SG', {
+    timeZone: 'Asia/Singapore',
+    month:'short', day:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12: false,
+  });
+}
+
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = String(s);
+  return d.innerHTML;
+}
+
+// ── build SSE URL ───────────────────────────────
+function buildStreamUrl() {
+  const p = new URLSearchParams();
+  const v = id => document.getElementById(id).value;
+  if (v('fImpact'))  p.set('impact_level', v('fImpact'));
+  if (v('fMarket'))  p.set('market', v('fMarket'));
+  if (v('fAsset'))   p.set('asset_class', v('fAsset'));
+  if (v('fSource'))  p.set('institution', v('fSource'));
+  const qs = p.toString();
+  return `${API}/stream${qs ? '?' + qs : ''}`;
+}
+
+// ── connect SSE ─────────────────────────────────
+function connect() {
+  if (evtSource) evtSource.close();
+  dot.className = 'status-dot';
+  statusTxt.textContent = 'Connecting';
+
+  evtSource = new EventSource(buildStreamUrl());
+  evtSource.onopen = () => {
+    dot.className = 'status-dot live';
+    statusTxt.textContent = 'Live';
+  };
+  evtSource.onmessage = (e) => {
+    try { addItem(JSON.parse(e.data), true); }
+    catch(err) { console.warn('SSE parse error:', err); }
+  };
+  evtSource.onerror = () => {
+    dot.className = 'status-dot error';
+    statusTxt.textContent = 'Reconnecting';
+  };
+}
+
+// ── item store for reader panel ─────────────────
+const itemStore = {};
+
+// ── render card ─────────────────────────────────
+function addItem(item, isNew) {
+  const sha = item.sha256 || item.item_id || '';
+  if (sha && seenSha.has(sha)) return;
+  if (sha) seenSha.add(sha);
+
+  const empty = document.getElementById('emptyState');
+  if (empty) empty.remove();
+
+  displayCount++;
+  statCount.textContent = displayCount;
+
+  // Store for reader
+  const uid = 'i' + Date.now().toString(36) + Math.random().toString(36).slice(2,5);
+  itemStore[uid] = item;
+
+  const card = document.createElement('div');
+  card.className = isNew ? 'card new' : 'card';
+  card.style.cursor = 'pointer';
+  card.addEventListener('click', (e) => {
+    // Don't open reader if clicking a link
+    if (e.target.tagName === 'A') return;
+    openReader(uid);
+  });
+
+  const impact = (item.impact_level || 'info').toLowerCase();
+  const source = item.institution || item.source || '';
+  const sourceShort = source.replace(/^TG\s+/, '');
+  const title  = item.title || 'Untitled';
+  const link   = item.local_path || item.link || '#';
+  const body   = item.markdown || '';
+  const time   = extractPublishedTime(item);
+
+  // Impact bar color
+  const impactColors = { critical:'var(--critical)', high:'var(--high)', medium:'var(--medium)', low:'var(--low)' };
+  const barColor = impactColors[impact] || 'var(--border)';
+
+  // Tags
+  const tags = [];
+  tags.push(`<span class="tag tag-impact ${impact}">${impact}</span>`);
+  if (item.sector)       tags.push(`<span class="tag tag-meta">${esc(item.sector)}</span>`);
+  if (item.asset_class)  tags.push(`<span class="tag tag-meta">${esc(item.asset_class)}</span>`);
+  if (item.event_type)   tags.push(`<span class="tag tag-meta">${esc(item.event_type)}</span>`);
+
+  const previewText = preview(body, 180);
+
+  card.innerHTML = `
+    <div class="card-inner">
+      <div class="card-impact" style="background:${barColor}"></div>
+      <div class="card-top">
+        <span class="card-source">${esc(sourceShort)}</span>
+        <span class="card-time" title="${esc(fullTime(time))}" data-ts="${typeof time === 'number' ? time : esc(String(time))}">${relTime(time)}</span>
+      </div>
+      <div class="card-title"><a href="${esc(link)}" target="_blank" rel="noopener">${esc(title)}</a></div>
+      ${previewText ? `<div class="card-preview">${esc(previewText)}</div>` : ''}
+      <div class="card-tags">${tags.join('')}</div>
+      ${body.length > 50 ? `<button class="card-expand" onclick="event.stopPropagation(); openReader('${uid}')">Read full article</button>` : ''}
+    </div>
+  `;
+
+  feed.insertBefore(card, feed.firstChild);
+
+  // Cap DOM
+  while (feed.children.length > 300) {
+    feed.removeChild(feed.lastChild);
+  }
+}
+
+// ── reader panel ────────────────────────────────
+function openReader(uid) {
+  const item = itemStore[uid];
+  if (!item) return;
+
+  const impact = (item.impact_level || 'info').toLowerCase();
+  const source = item.institution || item.source || '';
+  const sourceShort = source.replace(/^TG\s+/, '');
+  const title = item.title || 'Untitled';
+  const link  = item.local_path || item.link || '#';
+  const body  = item.markdown || '';
+  const time  = extractPublishedTime(item);
+
+  document.getElementById('readerSource').textContent = sourceShort;
+  document.getElementById('readerTitle').innerHTML = `<a href="${esc(link)}" target="_blank" rel="noopener">${esc(title)}</a>`;
+
+  // Meta tags
+  const tags = [];
+  tags.push(`<span class="tag tag-impact ${impact}">${impact}</span>`);
+  if (item.market)       tags.push(`<span class="tag tag-meta">${esc(item.market)}</span>`);
+  if (item.asset_class)  tags.push(`<span class="tag tag-meta">${esc(item.asset_class)}</span>`);
+  if (item.sector)       tags.push(`<span class="tag tag-meta">${esc(item.sector)}</span>`);
+  if (item.event_type)   tags.push(`<span class="tag tag-meta">${esc(item.event_type)}</span>`);
+  document.getElementById('readerMeta').innerHTML = tags.join('');
+  document.getElementById('readerTime').textContent = fullTime(time);
+  document.getElementById('readerBody').innerHTML = md(body);
+
+  const overlay = document.getElementById('readerOverlay');
+  overlay.classList.add('open');
+  // Scroll reader to top
+  overlay.querySelector('.reader-panel').scrollTop = 0;
+  document.body.style.overflow = 'hidden';
+}
+
+function closeReader(e) {
+  if (e && e.target !== e.currentTarget) return;
+  document.getElementById('readerOverlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+// Close on Escape
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeReader();
+});
+
+// ── filter chips ────────────────────────────────
+['fImpact','fMarket','fAsset','fSource'].forEach(id => {
+  const sel = document.getElementById(id);
+  const chip = sel.closest('.chip');
+  sel.addEventListener('change', () => {
+    chip.classList.toggle('active', !!sel.value);
+    reloadFeed();
+  });
+});
+
+function clearFilters() {
+  ['fImpact','fMarket','fAsset','fSource'].forEach(id => {
+    const s = document.getElementById(id);
+    s.value = '';
+    s.closest('.chip').classList.remove('active');
+  });
+  reloadFeed();
+}
+
+async function reloadFeed() {
+  seenSha.clear();
+  displayCount = 0;
+  feed.innerHTML = '<div class="empty-state" id="emptyState"><div class="empty-icon">&#9670;</div><p>Loading&hellip;</p></div>';
+  await loadRecent();
+  connect();
+}
+
+// ── health ──────────────────────────────────────
+async function pollHealth() {
+  try {
+    const r = await fetch(`${API}/health`);
+    const d = await r.json();
+    statCat.textContent = (d.catalog_items || 0).toLocaleString();
+  } catch {}
+}
+
+// ── load historical items ───────────────────────
+async function loadRecent() {
+  loadingBar.classList.add('active');
+  try {
+    const p = new URLSearchParams();
+    const v = id => document.getElementById(id).value;
+    if (v('fImpact'))  p.set('impact_level', v('fImpact'));
+    if (v('fMarket'))  p.set('market', v('fMarket'));
+    if (v('fAsset'))   p.set('asset_class', v('fAsset'));
+    if (v('fSource'))  p.set('institution', v('fSource'));
+    p.set('limit', '100');
+
+    const r = await fetch(`${API}/items?${p}`);
+    const arr = await r.json();
+    // API returns newest first; reverse so insertBefore puts newest on top
+    for (let i = arr.length - 1; i >= 0; i--) {
+      addItem(arr[i], false);
+    }
+  } catch(err) {
+    console.warn('Failed to load items:', err);
+  }
+  loadingBar.classList.remove('active');
+}
+
+// ── init ────────────────────────────────────────
+(async () => {
+  await loadRecent();
+  connect();
+  pollHealth();
+  setInterval(pollHealth, 30000);
+  // Update relative times every minute
+  setInterval(() => {
+    document.querySelectorAll('.card-time[data-ts]').forEach(el => {
+      let ts = el.getAttribute('data-ts');
+      if (!isNaN(Number(ts))) ts = Number(ts);
+      el.textContent = relTime(ts);
+    });
+  }, 60000);
+})();
+</script>
+</body>
+</html>

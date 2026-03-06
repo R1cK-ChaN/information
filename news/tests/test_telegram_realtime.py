@@ -9,8 +9,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.providers.telegram import _truncate_title
-from src.providers.telegram_realtime import (
+from src.telegram.provider import _truncate_title
+from src.telegram.realtime import (
     TelegramRealtimeProvider,
     _extract_url_from_entities,
     _make_item_id,

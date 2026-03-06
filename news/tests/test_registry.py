@@ -1,7 +1,8 @@
 """Tests for the feed registry."""
 
 import pytest
-from src.registry import Registry, FEEDS, CATEGORIES, FeedInfo
+from src.registry import Registry, FEEDS, CATEGORIES
+from src.feed_info import FeedInfo
 
 
 @pytest.fixture
@@ -32,7 +33,7 @@ class TestRegistry:
 
     def test_list_feeds_by_category(self, registry):
         markets = registry.list_feeds("markets")
-        assert len(markets) == 10
+        assert len(markets) == 14
         assert all(f.category == "markets" for f in markets)
 
     def test_list_feeds_all(self, registry):

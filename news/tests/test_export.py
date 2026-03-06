@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from src.export import (
+from src.common.export import (
     _news_sha256,
     convert_item,
     convert_item_llm,

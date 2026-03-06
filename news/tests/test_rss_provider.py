@@ -3,7 +3,7 @@
 import pytest
 import httpx
 import respx
-from src.providers.rss import RSSProvider, _make_item_id, _parse_date
+from src.rss.provider import RSSProvider, _make_item_id, _parse_date
 
 
 SAMPLE_RSS = """<?xml version="1.0" encoding="UTF-8"?>

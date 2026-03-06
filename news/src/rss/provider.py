@@ -8,7 +8,7 @@ from email.utils import parsedate_to_datetime
 import feedparser
 import httpx
 
-from .base import BaseProvider
+from ..common.base_provider import BaseProvider
 
 logger = logging.getLogger(__name__)
 

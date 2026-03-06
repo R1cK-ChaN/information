@@ -1,6 +1,6 @@
 """Tests for the finance keyword classifier."""
 
-from src.classifier import classify
+from src.common.classifier import classify
 
 
 class TestCriticalLevel:

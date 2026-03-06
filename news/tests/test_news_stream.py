@@ -70,7 +70,7 @@ deduplicator:
 """)
     stream = NewsStream(config_path=config)
     # Override sync_store to in-memory
-    from src.sync_store import SyncStore
+    from src.common.sync_store import SyncStore
     stream.sync_store = SyncStore(":memory:")
     # Override catalog to in-memory but keep output_dir
     from widgets.catalog import Catalog
@@ -90,7 +90,7 @@ class TestDescribe:
 
     def test_list_feeds(self, ns):
         feeds = ns.list_feeds("markets")
-        assert len(feeds) == 10
+        assert len(feeds) == 14
         assert all(f["category"] == "markets" for f in feeds)
 
     def test_list_all_feeds(self, ns):

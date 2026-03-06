@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 import httpx
 import lxml.html
 
-from .base import BaseProvider
+from ..common.base_provider import BaseProvider
 
 logger = logging.getLogger(__name__)
 

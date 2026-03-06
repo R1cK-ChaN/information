@@ -11,15 +11,16 @@ from pathlib import Path
 import yaml
 from dotenv import load_dotenv
 
-from .sync_store import SyncStore
-from .registry import Registry, FeedInfo
-from .classifier import classify
-from .deduplicator import Deduplicator
-from .providers.rss import RSSProvider
-from .providers.telegram import TelegramProvider
-from .providers.summarizer import Summarizer
-from .article_fetcher import ArticleFetcher
-from .export import (
+from .common.sync_store import SyncStore
+from .registry import Registry
+from .feed_info import FeedInfo
+from .common.classifier import classify
+from .common.deduplicator import Deduplicator
+from .rss.provider import RSSProvider
+from .telegram.provider import TelegramProvider
+from .common.summarizer import Summarizer
+from .rss.article_fetcher import ArticleFetcher
+from .common.export import (
     convert_item, convert_item_llm, save_extraction,
     _news_sha256, _compose_markdown,
 )
@@ -104,7 +105,7 @@ class NewsStream:
         pw_domains = pw_cfg.get("domains", [])
         if pw_domains:
             try:
-                from .paywall_fetcher import PaywallFetcher
+                from .rss.paywall_fetcher import PaywallFetcher
                 browser_dir = _PROJECT_ROOT / pw_cfg.get(
                     "browser_data_dir", "data/browser_profile",
                 )
@@ -127,6 +128,9 @@ class NewsStream:
             max_content_chars=af_cfg.get("max_content_chars", 15_000),
             paywall_fetcher=paywall_fetcher,
         )
+
+        # Callback hook for SSE broadcast (set externally)
+        self.on_store = None
 
         # Dedup config
         dedup_cfg = self.config.get("deduplicator", {})
@@ -382,6 +386,8 @@ class NewsStream:
             result = convert_item(item)
             json_path = save_extraction(result, self._output_dir)
             self.catalog.insert(result, json_path)
+            if self.on_store:
+                self.on_store(result)
             stored += 1
         return stored
 
@@ -414,6 +420,8 @@ class NewsStream:
 
             json_path = save_extraction(result, self._output_dir)
             self.catalog.insert(result, json_path)
+            if self.on_store:
+                self.on_store(result)
             stored += 1
         return stored
 

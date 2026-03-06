@@ -1,7 +1,7 @@
 """One-time interactive Telegram login (phone + OTP).
 
 Usage:
-    python -m src.telegram_login
+    python -m src.telegram.login
 
 Connects with Telethon, prompts for phone number and OTP code, and
 saves the session file to ``data/telegram_session/news_stream.session``.
@@ -19,7 +19,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from telethon import TelegramClient
 
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 _REPO_ROOT = _PROJECT_ROOT.parent
 
 SESSION_DIR = _PROJECT_ROOT / "data" / "telegram_session"

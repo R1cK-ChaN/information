@@ -1,7 +1,7 @@
 """Tests for the sync_store — feed polling state only."""
 
 import pytest
-from src.sync_store import SyncStore
+from src.common.sync_store import SyncStore
 
 
 @pytest.fixture

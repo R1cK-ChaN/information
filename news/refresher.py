@@ -41,14 +41,18 @@ import time
 from pathlib import Path
 
 import httpx
+from dotenv import load_dotenv
+
+_HERE = Path(__file__).resolve().parent          # information/news/
+_INFO = _HERE.parent                             # information/
+load_dotenv(_INFO / ".env")
+load_dotenv(_HERE / ".env", override=True)
 
 from src.news_stream import NewsStream
 from src.registry import FEEDS
+from src.api import BroadcastHub, create_app
 
 # ── paths ─────────────────────────────────────────────────────────────────────
-_HERE = Path(__file__).resolve().parent          # information/news/
-_INFO = _HERE.parent                             # information/
-
 _CATALOG_DEFAULT     = _INFO / "output" / "catalog.db"
 _INFO_LAYER_DEFAULT  = _INFO / "6_information_layer"
 _EXPORT_DEFAULT      = _INFO.parent / "rag-service" / "scripts" / "export_information_layer.py"
@@ -61,12 +65,19 @@ CATALOG_PATH    = Path(os.getenv("CATALOG_PATH",    str(_CATALOG_DEFAULT)))
 INFO_LAYER_PATH = Path(os.getenv("INFO_LAYER_PATH", str(_INFO_LAYER_DEFAULT)))
 EXPORT_SCRIPT   = Path(os.getenv("EXPORT_SCRIPT",   str(_EXPORT_DEFAULT)))
 
+# SSE API config
+SSE_API_ENABLED  = os.getenv("SSE_API_ENABLED", "true").lower() in ("true", "1", "yes")
+SSE_API_PORT     = int(os.getenv("SSE_API_PORT", "8080"))
+SSE_API_HOST     = os.getenv("SSE_API_HOST", "0.0.0.0")
+
 # Telegram real-time config
-TG_RT_ENABLED    = os.getenv("TELEGRAM_REALTIME_ENABLED", "false").lower() in ("true", "1", "yes")
+TG_ONLY          = os.getenv("TELEGRAM_ONLY", "false").lower() in ("true", "1", "yes")
+TG_RT_ENABLED    = os.getenv("TELEGRAM_REALTIME_ENABLED", "false").lower() in ("true", "1", "yes") or TG_ONLY
 TG_API_ID        = os.getenv("TELEGRAM_API_ID", "")
 TG_API_HASH      = os.getenv("TELEGRAM_API_HASH", "")
 TG_BATCH_INTERVAL = int(os.getenv("TELEGRAM_BATCH_INTERVAL", "30"))
 TG_BATCH_SIZE     = int(os.getenv("TELEGRAM_BATCH_SIZE", "10"))
+TG_BACKFILL_HOURS = int(os.getenv("TELEGRAM_BACKFILL_HOURS", "24"))
 
 # ── logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -211,17 +222,25 @@ async def async_main() -> None:
     log.info("  export:     %s", EXPORT_SCRIPT)
     log.info("  rag_url:    %s", RAG_URL)
     log.info("  telegram_rt: %s", TG_RT_ENABLED)
+    log.info("  telegram_only: %s", TG_ONLY)
+    log.info("  sse_api:     %s (port %d)", SSE_API_ENABLED, SSE_API_PORT)
     log.info("=" * 60)
 
     stream = NewsStream()
 
+    # ── SSE broadcast hub ────────────────────────────────────────────────
+    hub = BroadcastHub()
+    hub.bind_loop(asyncio.get_running_loop())
+    stream.on_store = hub.publish
+
     # Serialize all NewsStream access (SQLite is not thread-safe)
     stream_lock = asyncio.Lock()
 
-    # ── bootstrap: full first-run across all feeds ────────────────────────────
-    stored = await asyncio.to_thread(run_refresh, stream, True)
-    if stored > 0:
-        await asyncio.to_thread(_export_and_sync)
+    # ── bootstrap: full first-run across all feeds (skip in TG_ONLY mode) ────
+    if not TG_ONLY:
+        stored = await asyncio.to_thread(run_refresh, stream, True)
+        if stored > 0:
+            await asyncio.to_thread(_export_and_sync)
 
     # ── Telegram real-time setup ──────────────────────────────────────────────
     rt_connected = asyncio.Event()  # set when Telethon is connected
@@ -231,21 +250,36 @@ async def async_main() -> None:
     if TG_RT_ENABLED:
         tg_provider = await _start_telegram(rt_queue, rt_connected)
 
+        # Backfill last N hours of messages from all channels
+        if tg_provider is not None and TG_BACKFILL_HOURS > 0:
+            log.info("Backfilling last %d hours from Telegram channels...", TG_BACKFILL_HOURS)
+            count = await tg_provider.backfill(hours=TG_BACKFILL_HOURS)
+            if count > 0:
+                log.info("Backfill queued %d items, processing...", count)
+
     # ── launch concurrent tasks ───────────────────────────────────────────────
-    tasks = [
-        asyncio.create_task(_polling_loop(stream, stream_lock, rt_connected)),
-        asyncio.create_task(_queue_consumer(stream, stream_lock, rt_queue)),
-    ]
+    tasks = []
+
+    if not TG_ONLY:
+        tasks.append(asyncio.create_task(_polling_loop(stream, stream_lock, rt_connected)))
+
+    tasks.append(asyncio.create_task(_queue_consumer(stream, stream_lock, rt_queue)))
+
     if tg_provider is not None:
         tasks.append(
             asyncio.create_task(_telegram_watchdog(tg_provider, rt_queue, rt_connected))
         )
+
+    # ── SSE API server ───────────────────────────────────────────────────
+    if SSE_API_ENABLED:
+        tasks.append(asyncio.create_task(_run_api_server(hub, stream.catalog)))
 
     try:
         await asyncio.gather(*tasks)
     except KeyboardInterrupt:
         log.info("Shutting down...")
     finally:
+        await hub.shutdown()
         for t in tasks:
             t.cancel()
         if tg_provider is not None:
@@ -266,7 +300,7 @@ async def _start_telegram(
         return None
 
     try:
-        from src.providers.telegram_realtime import TelegramRealtimeProvider
+        from src.telegram.realtime import TelegramRealtimeProvider
     except ImportError:
         log.error("telethon not installed; falling back to HTTP scraping")
         return None
@@ -376,6 +410,23 @@ async def _telegram_watchdog(
                 log.info("Telegram real-time reconnected")
             except Exception as exc:
                 log.warning("Telegram reconnect failed: %s", exc)
+
+
+async def _run_api_server(hub: BroadcastHub, catalog) -> None:
+    """Run the SSE API server via uvicorn programmatic API."""
+    import uvicorn
+
+    app = create_app(hub, catalog)
+    config = uvicorn.Config(
+        app,
+        host=SSE_API_HOST,
+        port=SSE_API_PORT,
+        log_level="info",
+        access_log=False,
+    )
+    server = uvicorn.Server(config)
+    log.info("SSE API server starting on %s:%d", SSE_API_HOST, SSE_API_PORT)
+    await server.serve()
 
 
 # ── entry point ───────────────────────────────────────────────────────────────

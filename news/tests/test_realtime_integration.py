@@ -48,7 +48,7 @@ deduplicator:
   lookback_hours: 24
 """)
     stream = NewsStream(config_path=config)
-    from src.sync_store import SyncStore
+    from src.common.sync_store import SyncStore
     stream.sync_store = SyncStore(":memory:")
     from widgets.catalog import Catalog
     stream.catalog = Catalog(":memory:")

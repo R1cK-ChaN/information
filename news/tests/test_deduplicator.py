@@ -1,6 +1,6 @@
 """Tests for the headline deduplicator."""
 
-from src.deduplicator import Deduplicator, _tokenize, _jaccard_similarity
+from src.common.deduplicator import Deduplicator, _tokenize, _jaccard_similarity
 
 
 class TestTokenize:

@@ -10,13 +10,13 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Awaitable, Callable
 
 from telethon import TelegramClient, events
 from telethon.tl.types import Channel
 
-from .telegram import _truncate_title
+from .provider import _truncate_title
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +73,7 @@ class TelegramRealtimeProvider:
         if not await self._client.is_user_authorized():
             raise RuntimeError(
                 "Telegram session not authorized. "
-                "Run `python -m src.telegram_login` first."
+                "Run `python -m src.telegram.login` first."
             )
 
         # Resolve channel usernames → numeric IDs for fast filtering
@@ -110,6 +110,66 @@ class TelegramRealtimeProvider:
             await self._client.disconnect()
             self._client = None
         logger.info("Telegram real-time disconnected")
+
+    async def backfill(self, hours: int = 24) -> int:
+        """Fetch messages from the last *hours* across all channels.
+
+        Pushes them through the same ``on_items`` callback used by the
+        real-time handler so they enter the normal pipeline.
+        Returns total items queued.
+        """
+        if not self._client or not self._client.is_connected():
+            logger.warning("backfill called but client not connected")
+            return 0
+
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+        total = 0
+
+        for username, info in self._channel_map.items():
+            feed_name = info.get("feed_name", f"@{username}")
+            feed_category = info.get("feed_category", "")
+            batch: list[dict] = []
+
+            try:
+                entity = await self._client.get_entity(username)
+                async for msg in self._client.iter_messages(
+                    entity, offset_date=None, reverse=False, limit=200,
+                ):
+                    if msg.date and msg.date.astimezone(timezone.utc) < cutoff:
+                        break
+                    text = msg.text or ""
+                    if not text.strip():
+                        continue
+
+                    uname = (getattr(entity, "username", None) or username).lower()
+                    permalink = f"https://t.me/{uname}/{msg.id}"
+                    link = _extract_url_from_entities(msg) or permalink
+                    published = (
+                        msg.date.astimezone(timezone.utc).isoformat()
+                        if msg.date else datetime.now(timezone.utc).isoformat()
+                    )
+
+                    batch.append({
+                        "item_id": _make_item_id(permalink),
+                        "source": feed_name,
+                        "title": _truncate_title(text),
+                        "description": text,
+                        "link": link,
+                        "published": published,
+                        "fetched_at": datetime.now(timezone.utc).isoformat(),
+                        "feed_category": feed_category,
+                    })
+
+                if batch:
+                    await self._on_items(batch)
+                    total += len(batch)
+                    logger.info("Backfill @%s: %d messages", username, len(batch))
+
+            except Exception as exc:
+                logger.warning("Backfill @%s failed: %s", username, exc)
+
+        logger.info("Backfill complete: %d total items from %d channels", total, len(self._channel_map))
+        return total
 
     @property
     def connected(self) -> bool:
