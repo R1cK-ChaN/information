@@ -1,9 +1,10 @@
-"""Fed fetcher — FOMC statement, minutes, Beige Book, Industrial Production."""
+"""Fed fetcher — speeches, press releases, testimony, FOMC, Beige Book, IP."""
 
 from __future__ import annotations
 
 import re
 
+import feedparser
 from bs4 import BeautifulSoup
 
 from gov_report.fetchers.base import BaseFetcher
@@ -11,6 +12,22 @@ from gov_report.models import FetchResult
 
 # Listing pages and URL patterns
 _SOURCE_CONFIG = {
+    # RSS-backed sources – fetch latest entry from the feed then scrape its URL
+    "us_fed_speeches": {
+        "listing_url": "https://www.federalreserve.gov/feeds/speeches.xml",
+        "is_rss": True,
+        "data_category": "speeches",
+    },
+    "us_fed_press_all": {
+        "listing_url": "https://www.federalreserve.gov/feeds/press_all.xml",
+        "is_rss": True,
+        "data_category": "press_releases",
+    },
+    "us_fed_testimony": {
+        "listing_url": "https://www.federalreserve.gov/feeds/testimony.xml",
+        "is_rss": True,
+        "data_category": "testimony",
+    },
     "us_fed_fomc_statement": {
         "listing_url": "https://www.federalreserve.gov/newsevents/pressreleases.htm",
         "link_pattern": r"/newsevents/pressreleases/monetary\d{8}a\.htm",
@@ -51,6 +68,14 @@ class FedFetcher(BaseFetcher):
         cfg = _SOURCE_CONFIG.get(self.source_id)
         if not cfg:
             raise ValueError(f"No config for {self.source_id}")
+
+        if cfg.get("is_rss"):
+            feed = feedparser.parse(cfg["listing_url"])
+            if feed.entries:
+                url = feed.entries[0].get("link", "")
+                if url:
+                    return [await self.fetch_by_url(url)]
+            return []
 
         if self.source_id == "us_fed_ip":
             # Industrial production is a direct page

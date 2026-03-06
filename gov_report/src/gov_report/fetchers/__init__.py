@@ -7,6 +7,9 @@ from gov_report.fetchers.base import BaseFetcher
 # Lazy imports to avoid circular deps
 _FETCHER_MAP: dict[str, str] = {
     # US sources
+    "us_fed_speeches": "gov_report.fetchers.us_fed:FedFetcher",
+    "us_fed_press_all": "gov_report.fetchers.us_fed:FedFetcher",
+    "us_fed_testimony": "gov_report.fetchers.us_fed:FedFetcher",
     "us_bls_cpi": "gov_report.fetchers.us_bls:BLSFetcher",
     "us_bls_ppi": "gov_report.fetchers.us_bls:BLSFetcher",
     "us_bls_nfp": "gov_report.fetchers.us_bls:BLSFetcher",
@@ -60,6 +63,10 @@ _FETCHER_MAP: dict[str, str] = {
     "cn_scio_press": "gov_report.fetchers.cn_scio:SCIOFetcher",
     "cn_mof_fiscal": "gov_report.fetchers.cn_mof:MOFFetcher",
     "cn_mof_bond": "gov_report.fetchers.cn_mof:MOFFetcher",
+    # ECB RSS sources (speeches, working papers)
+    "ecb_press": "gov_report.fetchers.eu_ecb:ECBFetcher",
+    "ecb_speeches": "gov_report.fetchers.eu_ecb:ECBFetcher",
+    "ecb_working_papers": "gov_report.fetchers.eu_ecb:ECBFetcher",
     # International institutions
     "intl_imf_weo": "gov_report.fetchers.intl_imf:IMFFetcher",
     "intl_imf_gfsr": "gov_report.fetchers.intl_imf:IMFFetcher",

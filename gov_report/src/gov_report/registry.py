@@ -44,6 +44,30 @@ SOURCES: dict[str, SourceConfig] = {
         data_category="employment",
         description="Employment Situation (Non-Farm Payrolls)",
     ),
+    "us_fed_speeches": SourceConfig(
+        source_id="us_fed_speeches",
+        institution="Federal Reserve",
+        country="US",
+        language="en",
+        data_category="speeches",
+        description="Fed Governor and President Speeches",
+    ),
+    "us_fed_press_all": SourceConfig(
+        source_id="us_fed_press_all",
+        institution="Federal Reserve",
+        country="US",
+        language="en",
+        data_category="press_releases",
+        description="Federal Reserve Press Releases (All)",
+    ),
+    "us_fed_testimony": SourceConfig(
+        source_id="us_fed_testimony",
+        institution="Federal Reserve",
+        country="US",
+        language="en",
+        data_category="testimony",
+        description="Congressional Testimony",
+    ),
     "us_fed_fomc_statement": SourceConfig(
         source_id="us_fed_fomc_statement",
         institution="Federal Reserve",
@@ -139,6 +163,31 @@ SOURCES: dict[str, SourceConfig] = {
         language="en",
         data_category="consumer_sentiment",
         description="Consumer Sentiment Survey",
+    ),
+    # --- EU Sources ---
+    "ecb_press": SourceConfig(
+        source_id="ecb_press",
+        institution="European Central Bank",
+        country="EU",
+        language="en",
+        data_category="press_releases",
+        description="ECB Press Releases",
+    ),
+    "ecb_speeches": SourceConfig(
+        source_id="ecb_speeches",
+        institution="European Central Bank",
+        country="EU",
+        language="en",
+        data_category="speeches",
+        description="ECB Speeches",
+    ),
+    "ecb_working_papers": SourceConfig(
+        source_id="ecb_working_papers",
+        institution="European Central Bank",
+        country="EU",
+        language="en",
+        data_category="research",
+        description="ECB Working Papers",
     ),
     # --- CN Sources ---
     "cn_stats_cpi": SourceConfig(
