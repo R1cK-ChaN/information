@@ -418,7 +418,74 @@ SCIO_ENDPOINTS = {
 
 ---
 
-## 五、RSS 订阅（优先使用）
+## 五、完整机构清单（按地区）
+
+### 🇺🇸 美国
+
+| 机构 | source_id(s) | 核心内容 | RSS | 爬取难度 |
+|------|-------------|---------|-----|---------|
+| **Federal Reserve** | `us_fed_fomc_statement` `us_fed_fomc_minutes` `us_fed_beigebook` `us_fed_ip` | FOMC声明、会议纪要、褐皮书、工业产出 | `federalreserve.gov/feeds/press_all.xml` | ✅ 极简单 |
+| **BLS** | `us_bls_cpi` `us_bls_ppi` `us_bls_nfp` | CPI、PPI、非农就业 | 无RSS，固定URL触发 | ✅ 极简单 |
+| **BEA** | `us_bea_gdp` `us_bea_pce` `us_bea_trade` | GDP、PCE、贸易账 | `bea.gov/rss/releases.xml` | ✅ 极简单 |
+| **ISM** | `us_ism_manufacturing` `us_ism_services` | 制造业/服务业PMI+企业评述 | 无RSS | ✅ 简单 |
+| **US Treasury** | `us_treasury_tic` `us_treasury_debt` | TIC资金流动、债务上限声明 | `home.treasury.gov/news/rss.xml` | ✅ 简单 |
+| **Census Bureau** | `us_census_retail` `us_census_housing` | 零售销售、新屋开工 | `census.gov/economic-indicators/feed.xml` | ✅ 简单 |
+| **U of Michigan** | `us_umich_sentiment` | 消费者信心、通胀预期 | 无RSS | ✅ 简单 |
+
+### 🇪🇺 欧元区
+
+| 机构 | source_id(s) | 核心内容 | RSS | 爬取难度 |
+|------|-------------|---------|-----|---------|
+| **ECB** | `eu_ecb_statement` `eu_ecb_minutes` `eu_ecb_bulletin` | 利率决定、货币政策纪要、经济公报 | `ecb.europa.eu/rss/press.html` | ✅ 极简单 |
+| **Eurostat** | `eu_eurostat_cpi` `eu_eurostat_gdp` `eu_eurostat_employment` | 欧元区HICP、GDP、失业率 | `ec.europa.eu/eurostat/news/rss` | ✅ 简单 |
+
+### 🇬🇧 英国
+
+| 机构 | source_id(s) | 核心内容 | RSS | 爬取难度 |
+|------|-------------|---------|-----|---------|
+| **Bank of England** | `uk_boe_rate` `uk_boe_minutes` `uk_boe_mpr` | 利率决定、MPC会议纪要、货币政策报告（季度） | `bankofengland.co.uk/rss.xml` | ✅ 简单 |
+| **ONS** | `uk_ons_cpi` `uk_ons_gdp` `uk_ons_employment` | 英国CPI、GDP、就业 | `ons.gov.uk/feed` | ✅ 简单 |
+
+### 🇯🇵 日本
+
+| 机构 | source_id(s) | 核心内容 | RSS | 爬取难度 |
+|------|-------------|---------|-----|---------|
+| **日本银行（BOJ）** | `jp_boj_statement` `jp_boj_outlook` `jp_boj_minutes` | 利率决定、展望报告（季度）、意见摘要 | `boj.or.jp/rss/english/index.rss` | ✅ 简单（英文版） |
+| **内阁府（CAO）** | `jp_cao_gdp` | GDP速报（英文版） | 无RSS | ⚠️ 需关注英文页面 |
+
+### 🇨🇳 中国
+
+| 机构 | source_id(s) | 核心内容 | RSS | 爬取难度 |
+|------|-------------|---------|-----|---------|
+| **国家统计局** | `cn_stats_cpi` `cn_stats_ppi` `cn_stats_gdp` `cn_stats_pmi` `cn_stats_industrial` `cn_stats_retail` `cn_stats_fai` | CPI、PPI、GDP、PMI+发言人点评 | `stats.gov.cn/rss.xml` | ⚠️ 加延迟 |
+| **人民银行** | `cn_pboc_monetary` `cn_pboc_lpr` `cn_pboc_mpr` | M2、社融、LPR、货币政策报告 | 无RSS | ⚠️ 加延迟 |
+| **国新办** | `cn_scio_press` | 部委发布会完整实录 | 无RSS | ⚠️ 加延迟 |
+| **财政部** | `cn_mof_fiscal` `cn_mof_bond` | 财政收支、债券发行 | 无RSS | ⚠️ 加延迟 |
+| **海关总署** | `cn_customs_trade` | 进出口贸易数据 | 无RSS | ⚠️ 加延迟 |
+| **外汇管理局** | `cn_safe_fx` | 外汇储备 | 无RSS | ⚠️ 加延迟 |
+| **财新/S&P** | `cn_caixin_pmi` | 财新制造业/服务业PMI | 无RSS | ✅ 简单（英文版） |
+
+### 🌐 国际机构
+
+| 机构 | source_id(s) | 核心内容 | RSS | 爬取难度 |
+|------|-------------|---------|-----|---------|
+| **IMF** | `intl_imf_weo` `intl_imf_gfsr` `intl_imf_press` | 世界经济展望、金融稳定报告、第四条款磋商 | `imf.org/en/rss` | ✅ 简单 |
+| **World Bank** | `intl_wb_gep` `intl_wb_press` | 全球经济展望、发展报告 | `worldbank.org/en/rss` | ✅ 简单 |
+| **BIS** | `intl_bis_quarterly` `intl_bis_research` `intl_bis_speech` | 季度报告、工作论文、央行演讲库 | `bis.org/rss.htm` | ✅ 简单 |
+| **OECD** | `intl_oecd_outlook` `intl_oecd_cli` `intl_oecd_press` | 经济展望、综合领先指标、各国评估 | `oecd.org/feed` | ✅ 简单 |
+
+### 🏦 其他重要央行
+
+| 机构 | source_id(s) | 核心内容 | RSS | 爬取难度 |
+|------|-------------|---------|-----|---------|
+| **澳联储（RBA）** | `au_rba_rate` `au_rba_statement` | 现金利率决议、董事会会议纪要 | `rba.gov.au/rss.xml` | ✅ 简单 |
+| **加拿大央行（BOC）** | `ca_boc_statement` `ca_boc_mpr` | 利率声明、货币政策报告 | `bankofcanada.ca/rss` | ✅ 简单 |
+| **瑞士央行（SNB）** | `ch_snb_statement` | 季度货币政策评估 | `snb.ch/rss/en` | ✅ 简单 |
+| **瑞典央行（Riksbank）** | `se_riksbank_statement` `se_riksbank_mpr` | 政策利率决议、货币政策报告 | `riksbank.se/en-gb/rss/` | ✅ 简单 |
+
+---
+
+## 六、RSS 订阅（优先使用）
 
 以下来源提供 RSS Feed，应优先使用，无需解析 HTML 列表页：
 
@@ -428,6 +495,19 @@ SCIO_ENDPOINTS = {
 | 国家统计局 | `https://www.stats.gov.cn/rss.xml` | 包含最新发布 |
 | 美联储 | `https://www.federalreserve.gov/feeds/press_all.xml` | 所有新闻稿 |
 | Census Bureau | `https://www.census.gov/economic-indicators/feed.xml` | 零售、房屋开工等 |
+| ECB | `https://www.ecb.europa.eu/rss/press.html` | 所有新闻稿和演讲 |
+| Eurostat | `https://ec.europa.eu/eurostat/news/rss` | 数据新闻稿 |
+| Bank of England | `https://www.bankofengland.co.uk/rss.xml` | 政策声明、报告 |
+| ONS | `https://www.ons.gov.uk/feed` | 统计数据发布 |
+| BOJ | `https://www.boj.or.jp/rss/english/index.rss` | 英文政策文件 |
+| RBA | `https://www.rba.gov.au/rss.xml` | 政策声明 |
+| BOC | `https://www.bankofcanada.ca/rss` | 利率声明和报告 |
+| SNB | `https://www.snb.ch/rss/en` | 货币政策评估 |
+| Riksbank | `https://www.riksbank.se/en-gb/rss/` | 政策文件 |
+| IMF | `https://www.imf.org/en/rss` | 旗舰报告和新闻稿 |
+| World Bank | `https://www.worldbank.org/en/rss` | 报告和新闻稿 |
+| BIS | `https://www.bis.org/rss.htm` | 季度报告和研究 |
+| OECD | `https://www.oecd.org/feed` | 经济展望和数据 |
 
 ```python
 import feedparser
@@ -444,7 +524,7 @@ def poll_rss(feed_url: str) -> list:
 
 ---
 
-## 六、完整调度流程代码
+## 七、完整调度流程代码
 
 ```python
 import schedule
@@ -535,7 +615,7 @@ while True:
 
 ---
 
-## 七、元数据字段规范
+## 八、元数据字段规范
 
 每条入库文档必须携带以下元数据，否则 Agent 无法准确引用：
 
@@ -562,7 +642,7 @@ while True:
 
 ---
 
-## 八、各来源价值评级
+## 九、各来源价值评级
 
 | 来源 | 数据类型 | 包含点评？ | 稳定性 | 优先级 |
 |------|---------|-----------|-------|-------|
@@ -576,3 +656,18 @@ while True:
 | 财新/S&P PMI | PMI | ✅ 定性评述 | ⭐⭐⭐⭐ | 🟠 高 |
 | 海关总署 | 贸易 | ✅ 分析说明 | ⭐⭐⭐⭐ | 🟡 中高 |
 | 密歇根大学调查 | 消费者信心 | ✅ 调查解读 | ⭐⭐⭐ | 🟡 中高 |
+| ECB（欧洲央行） | 利率/货币政策 | ✅ 发布会记录 | ⭐⭐⭐⭐⭐ | 🔴 最高 |
+| Eurostat | CPI/GDP/就业 | ✅ 统计说明 | ⭐⭐⭐⭐⭐ | 🟠 高 |
+| Bank of England | 利率/MPR | ✅ MPC原话 | ⭐⭐⭐⭐⭐ | 🟠 高 |
+| ONS（英国） | CPI/GDP/就业 | ✅ 统计分析 | ⭐⭐⭐⭐⭐ | 🟠 高 |
+| BOJ（日本央行） | 利率/展望报告 | ✅ 意见摘要 | ⭐⭐⭐⭐⭐ | 🟠 高 |
+| 中国财政部 | 财政收支 | ✅ 说明文字 | ⭐⭐⭐⭐ | 🟡 中高 |
+| US Treasury | TIC/债务 | ✅ 声明 | ⭐⭐⭐⭐ | 🟡 中高 |
+| IMF | WEO/GFSR | ✅ 全球评估 | ⭐⭐⭐⭐⭐ | 🟠 高 |
+| BIS | 季报/工作论文 | ✅ 研究深度分析 | ⭐⭐⭐⭐⭐ | 🟠 高 |
+| OECD | 经济展望/CLI | ✅ 国别评估 | ⭐⭐⭐⭐ | 🟡 中高 |
+| World Bank | GEP | ✅ 发展分析 | ⭐⭐⭐⭐ | 🟡 中高 |
+| RBA（澳联储） | 利率/纪要 | ✅ 委员会讨论 | ⭐⭐⭐⭐ | 🟡 中高 |
+| BOC（加拿大） | 利率/MPR | ✅ 声明 | ⭐⭐⭐⭐ | 🟡 中高 |
+| SNB（瑞士） | 利率 | ✅ 政策评估 | ⭐⭐⭐ | 🟢 中 |
+| Riksbank（瑞典） | 利率/MPR | ✅ 声明 | ⭐⭐⭐ | 🟢 中 |

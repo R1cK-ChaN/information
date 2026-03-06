@@ -22,6 +22,27 @@ _FETCHER_MAP: dict[str, str] = {
     "us_census_retail": "gov_report.fetchers.us_census:CensusFetcher",
     "us_census_housing": "gov_report.fetchers.us_census:CensusFetcher",
     "us_umich_sentiment": "gov_report.fetchers.us_umich:UMichFetcher",
+    "us_treasury_tic": "gov_report.fetchers.us_treasury:TreasuryFetcher",
+    "us_treasury_debt": "gov_report.fetchers.us_treasury:TreasuryFetcher",
+    # EU sources
+    "eu_ecb_statement": "gov_report.fetchers.eu_ecb:ECBFetcher",
+    "eu_ecb_minutes": "gov_report.fetchers.eu_ecb:ECBFetcher",
+    "eu_ecb_bulletin": "gov_report.fetchers.eu_ecb:ECBFetcher",
+    "eu_eurostat_cpi": "gov_report.fetchers.eu_eurostat:EurostatFetcher",
+    "eu_eurostat_gdp": "gov_report.fetchers.eu_eurostat:EurostatFetcher",
+    "eu_eurostat_employment": "gov_report.fetchers.eu_eurostat:EurostatFetcher",
+    # UK sources
+    "uk_boe_rate": "gov_report.fetchers.uk_boe:BOEFetcher",
+    "uk_boe_minutes": "gov_report.fetchers.uk_boe:BOEFetcher",
+    "uk_boe_mpr": "gov_report.fetchers.uk_boe:BOEFetcher",
+    "uk_ons_cpi": "gov_report.fetchers.uk_ons:ONSFetcher",
+    "uk_ons_gdp": "gov_report.fetchers.uk_ons:ONSFetcher",
+    "uk_ons_employment": "gov_report.fetchers.uk_ons:ONSFetcher",
+    # Japan sources
+    "jp_boj_statement": "gov_report.fetchers.jp_boj:BOJFetcher",
+    "jp_boj_outlook": "gov_report.fetchers.jp_boj:BOJFetcher",
+    "jp_boj_minutes": "gov_report.fetchers.jp_boj:BOJFetcher",
+    "jp_cao_gdp": "gov_report.fetchers.jp_boj:BOJFetcher",
     # CN sources
     "cn_stats_cpi": "gov_report.fetchers.cn_nbs:NBSFetcher",
     "cn_stats_ppi": "gov_report.fetchers.cn_nbs:NBSFetcher",
@@ -37,6 +58,28 @@ _FETCHER_MAP: dict[str, str] = {
     "cn_customs_trade": "gov_report.fetchers.cn_customs:CustomsFetcher",
     "cn_safe_fx": "gov_report.fetchers.cn_safe:SAFEFetcher",
     "cn_scio_press": "gov_report.fetchers.cn_scio:SCIOFetcher",
+    "cn_mof_fiscal": "gov_report.fetchers.cn_mof:MOFFetcher",
+    "cn_mof_bond": "gov_report.fetchers.cn_mof:MOFFetcher",
+    # International institutions
+    "intl_imf_weo": "gov_report.fetchers.intl_imf:IMFFetcher",
+    "intl_imf_gfsr": "gov_report.fetchers.intl_imf:IMFFetcher",
+    "intl_imf_press": "gov_report.fetchers.intl_imf:IMFFetcher",
+    "intl_wb_gep": "gov_report.fetchers.intl_worldbank:WorldBankFetcher",
+    "intl_wb_press": "gov_report.fetchers.intl_worldbank:WorldBankFetcher",
+    "intl_bis_quarterly": "gov_report.fetchers.intl_bis:BISFetcher",
+    "intl_bis_research": "gov_report.fetchers.intl_bis:BISFetcher",
+    "intl_bis_speech": "gov_report.fetchers.intl_bis:BISFetcher",
+    "intl_oecd_outlook": "gov_report.fetchers.intl_oecd:OECDFetcher",
+    "intl_oecd_cli": "gov_report.fetchers.intl_oecd:OECDFetcher",
+    "intl_oecd_press": "gov_report.fetchers.intl_oecd:OECDFetcher",
+    # Other central banks
+    "au_rba_statement": "gov_report.fetchers.other_cb:OtherCBFetcher",
+    "au_rba_rate": "gov_report.fetchers.other_cb:OtherCBFetcher",
+    "ca_boc_statement": "gov_report.fetchers.other_cb:OtherCBFetcher",
+    "ca_boc_mpr": "gov_report.fetchers.other_cb:OtherCBFetcher",
+    "ch_snb_statement": "gov_report.fetchers.other_cb:OtherCBFetcher",
+    "se_riksbank_statement": "gov_report.fetchers.other_cb:OtherCBFetcher",
+    "se_riksbank_mpr": "gov_report.fetchers.other_cb:OtherCBFetcher",
 }
 
 
