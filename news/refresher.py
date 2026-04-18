@@ -59,6 +59,7 @@ _EXPORT_DEFAULT      = _INFO.parent / "rag-service" / "scripts" / "export_inform
 
 # ── config ────────────────────────────────────────────────────────────────────
 INTERVAL        = int(os.getenv("REFRESH_INTERVAL_SECONDS", "900"))
+NEWSLETTER_INTERVAL = int(os.getenv("NEWSLETTER_REFRESH_INTERVAL_SECONDS", "14400"))  # 4h
 RAG_URL         = os.getenv("RAG_SERVICE_URL", "http://localhost:8000").rstrip("/")
 RAG_API_KEY     = os.getenv("RAG_API_KEY", "")
 CATALOG_PATH    = Path(os.getenv("CATALOG_PATH",    str(_CATALOG_DEFAULT)))
@@ -217,6 +218,7 @@ async def async_main() -> None:
     log.info("=" * 60)
     log.info("News refresher starting")
     log.info("  interval:   %ds (%.0f min)", INTERVAL, INTERVAL / 60)
+    log.info("  newsletter_interval: %ds (%.1f h)", NEWSLETTER_INTERVAL, NEWSLETTER_INTERVAL / 3600)
     log.info("  catalog:    %s", CATALOG_PATH)
     log.info("  info_layer: %s", INFO_LAYER_PATH)
     log.info("  export:     %s", EXPORT_SCRIPT)
@@ -264,6 +266,9 @@ async def async_main() -> None:
         tasks.append(asyncio.create_task(_polling_loop(stream, stream_lock, rt_connected)))
 
     tasks.append(asyncio.create_task(_queue_consumer(stream, stream_lock, rt_queue)))
+
+    # Newsletter IMAP tick (no-op when provider disabled)
+    tasks.append(asyncio.create_task(_newsletter_loop(stream, stream_lock)))
 
     if tg_provider is not None:
         tasks.append(
@@ -349,6 +354,33 @@ async def _polling_loop(
             await asyncio.to_thread(_export_and_sync)
         else:
             log.info("No new items -- skipping export + RAG sync")
+
+
+async def _newsletter_loop(stream: NewsStream, lock: asyncio.Lock) -> None:
+    """Newsletter IMAP polling loop (every NEWSLETTER_INTERVAL seconds).
+
+    No-op when stream.newsletter is None (IMAP creds / senders not configured).
+    """
+    if stream.newsletter is None:
+        log.info("Newsletter provider disabled -- newsletter loop not started")
+        return
+
+    log.info("Newsletter loop starting (interval=%ds / %.1fh)",
+             NEWSLETTER_INTERVAL, NEWSLETTER_INTERVAL / 3600)
+
+    # First tick runs immediately on startup; subsequent ticks honour interval
+    while True:
+        async with lock:
+            result = await asyncio.to_thread(stream.refresh_newsletters)
+        stored = result.get("stored", 0)
+        log.info(
+            "Newsletter tick: fetched=%d stored=%d duplicates=%d errors=%d",
+            result.get("fetched", 0), stored,
+            result.get("duplicates", 0), len(result.get("errors", [])),
+        )
+        if stored > 0:
+            await asyncio.to_thread(_export_and_sync)
+        await asyncio.sleep(NEWSLETTER_INTERVAL)
 
 
 async def _queue_consumer(

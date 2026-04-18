@@ -33,10 +33,36 @@ providers:
       - forbes.com
     browser_data_dir: "data/browser_profile"
     timeout_ms: 30000
+    wayback_fallback: true
+    wayback_timeout_seconds: 15
+    # Extracted content shorter than this + login keywords -> treat as expired session
+    min_content_chars: 500
   summarizer:
     api_key_env: "GROQ_API_KEY"
     model: "llama-3.1-8b-instant"
     max_tokens: 150
+  newsletter:
+    enabled: false            # flip to true once IMAP creds + senders are set
+    imap_host: "imap.gmail.com"
+    imap_port: 993
+    imap_user_env: "IMAP_USER"
+    imap_password_env: "IMAP_PASSWORD"
+    mailbox: "INBOX"
+    lookback_days: 7
+    max_section_chars: 15000
+    timeout_seconds: 30
+    state_db: "data/newsletter_state.db"
+    # Each sender rule: address = substring of From:, subject_contains = substring of Subject:
+    # parser: "generic" works for most; add custom parsers in src/newsletter/parsers.py
+    senders: []
+    # Example:
+    # senders:
+    #   - address: "noreply@news.bloomberg.com"
+    #     subject_contains: "Money Stuff"
+    #     parser: "generic"
+    #   - address: "news@ft.com"
+    #     subject_contains: "Lex"
+    #     parser: "generic"
 
 retry:
   max_retries: 3

@@ -143,6 +143,72 @@ bloomberg.com, reuters.com, barrons.com, nytimes.com, wsj.com, fxstreet.com, the
 - Login sessions are saved in `data/browser_profile/` (git-ignored)
 - One-time login: `python -m src.paywall_login <url>` opens a visible browser for manual login
 
+### Fallback chain and session expiry
+
+Each paywall fetch runs through a three-step chain:
+
+1. **Playwright** with the persistent logged-in profile (as above).
+2. **Wayback Machine** — on Playwright failure or suspected session expiry, the fetcher queries `archive.org/wayback/available` and reads the closest 200-status snapshot. Config: `paywall_fetcher.wayback_fallback: true`, `wayback_timeout_seconds: 15`.
+3. **RSS description** — final fallback, never loses content.
+
+Session-expiry detection flags a fetch as a probable login wall when:
+
+- The post-navigation URL path contains `/login`, `/signin`, `/auth`, `/subscribe`, `/register`, `/account`, or `/paywall`, or
+- Extracted text is shorter than `paywall_fetcher.min_content_chars` (default `500`) **and** contains a known paywall phrase (`subscribe to continue`, `sign in to read`, etc.)
+
+When triggered, the refresher logs a warning naming the affected configured domain and the exact `paywall_login` command to rerun. Per-cycle counters (`attempts`, `playwright_ok/fail`, `session_expiry_suspected`, `wayback_ok/fail`, `rss_fallback`, `suspected_domains`) are emitted at the end of every `refresh()` cycle.
+
+## Newsletter Ingestion (IMAP)
+
+Publisher newsletters (Bloomberg Opinion, FT Lex, WSJ, etc.) ship full column bodies to subscribers' inboxes — content that RSS and paywall scraping cannot reach. The newsletter provider fetches those emails over IMAP, splits each one into topical sections, and stores each section as a `news_items` row with a synthetic `mailto://` link.
+
+```
+[IMAP inbox]  ──(SEARCH SINCE + FROM)──▶  matched emails
+    │
+    ▼  per-sender parser (default: generic, splits on h1/h2/h3)
+NewsletterSection × N  ──▶  news_items row × N (one per section)
+    │
+    ▼  sha256(sender + subject + YYYY-MM-DD) → processed_emails
+(loose dedup — resends collapse into one key)
+```
+
+### Setup
+
+1. Generate a dedicated app password for the mailbox (Gmail: https://myaccount.google.com/apppasswords).
+2. Set `IMAP_USER` and `IMAP_PASSWORD` in `.env`.
+3. Flip `providers.newsletter.enabled: true` in `config/news_stream.yaml` and add sender rules:
+
+```yaml
+newsletter:
+  enabled: true
+  imap_host: "imap.gmail.com"
+  senders:
+    - address: "noreply@news.bloomberg.com"
+      subject_contains: "Money Stuff"
+      parser: "generic"
+    - address: "news@ft.com"
+      subject_contains: "Lex"
+      parser: "generic"
+```
+
+The newsletter loop runs on its own 4-hour tick (`NEWSLETTER_REFRESH_INTERVAL_SECONDS`, default `14400`). When disabled or when IMAP creds are missing, the loop is a no-op.
+
+### Schema mapping
+
+- One email → N `news_items` rows (one per parsed section).
+- `link` is synthetic: `mailto://<sender-domain>/<subject-slug>/<YYYY-MM-DD>#<section-anchor>`.
+- `source` is `newsletter:<sender-domain>` (override via `sender.source`).
+- `feed_category` is `newsletter`.
+
+### Dedup
+
+- **Email level** (loose): `sha256(sender + subject + YYYY-MM-DD)`, stored in `data/newsletter_state.db`. Publisher resends within the same day collapse into one key.
+- **Row level**: the standard catalog SHA over the synthetic `mailto://` link ensures sections are unique across email + anchor.
+
+### Custom parsers
+
+Per-sender parsers live in `src/newsletter/parsers.py`. Register via `register_parser("name", fn)` and reference by name in the sender rule's `parser:` field. The default `generic` parser handles Bloomberg / FT / WSJ templates that use `<h2>`/`<h3>` for topical breaks.
+
 ## SQLite Schema
 
 Three tables:

@@ -20,6 +20,8 @@ from .rss.provider import RSSProvider
 from .telegram.provider import TelegramProvider
 from .common.summarizer import Summarizer
 from .rss.article_fetcher import ArticleFetcher
+from .newsletter.provider import NewsletterProvider, SenderRule
+from .newsletter.state import NewsletterState
 from .common.export import (
     convert_item, convert_item_llm, save_extraction,
     _news_sha256, _compose_markdown,
@@ -114,6 +116,9 @@ class NewsStream:
                     browser_data_dir=browser_dir,
                     timeout_ms=pw_cfg.get("timeout_ms", 30_000),
                     max_content_chars=af_cfg.get("max_content_chars", 15_000),
+                    wayback_fallback=pw_cfg.get("wayback_fallback", True),
+                    wayback_timeout_seconds=pw_cfg.get("wayback_timeout_seconds", 15),
+                    min_content_chars=pw_cfg.get("min_content_chars", 500),
                 )
                 logger.info(
                     "Paywall fetcher enabled for %d domains", len(pw_domains),
@@ -128,6 +133,53 @@ class NewsStream:
             max_content_chars=af_cfg.get("max_content_chars", 15_000),
             paywall_fetcher=paywall_fetcher,
         )
+
+        # Newsletter provider (optional — requires IMAP creds + configured senders)
+        self.newsletter: NewsletterProvider | None = None
+        self._newsletter_state: NewsletterState | None = None
+        nl_cfg = self.config["providers"].get("newsletter", {})
+        if nl_cfg.get("enabled") and nl_cfg.get("senders"):
+            user = os.getenv(nl_cfg.get("imap_user_env", "IMAP_USER"), "")
+            pwd = os.getenv(nl_cfg.get("imap_password_env", "IMAP_PASSWORD"), "")
+            if not user or not pwd:
+                logger.warning(
+                    "newsletter.enabled=true but %s / %s not set; skipping",
+                    nl_cfg.get("imap_user_env", "IMAP_USER"),
+                    nl_cfg.get("imap_password_env", "IMAP_PASSWORD"),
+                )
+            else:
+                state_path = _PROJECT_ROOT / nl_cfg.get(
+                    "state_db", "data/newsletter_state.db",
+                )
+                self._newsletter_state = NewsletterState(state_path)
+                rules = [
+                    SenderRule(
+                        address=s["address"],
+                        subject_contains=s.get("subject_contains", ""),
+                        parser=s.get("parser", "generic"),
+                        source=s.get("source"),
+                    )
+                    for s in nl_cfg["senders"]
+                ]
+                self.newsletter = NewsletterProvider(
+                    imap_host=nl_cfg.get("imap_host", "imap.gmail.com"),
+                    imap_port=nl_cfg.get("imap_port", 993),
+                    imap_user=user,
+                    imap_password=pwd,
+                    sender_rules=rules,
+                    state=self._newsletter_state,
+                    mailbox=nl_cfg.get("mailbox", "INBOX"),
+                    lookback_days=nl_cfg.get("lookback_days", 7),
+                    max_section_chars=nl_cfg.get(
+                        "max_section_chars",
+                        af_cfg.get("max_content_chars", 15_000),
+                    ),
+                    timeout_seconds=nl_cfg.get("timeout_seconds", 30),
+                )
+                logger.info(
+                    "Newsletter provider enabled (%d sender rules, state=%s)",
+                    len(rules), state_path,
+                )
 
         # Callback hook for SSE broadcast (set externally)
         self.on_store = None
@@ -295,6 +347,7 @@ class NewsStream:
             stored = self._process_items_keyword(pending_items, results)
         results["stored"] = stored
 
+        self._log_paywall_health()
         return results
 
     def process_realtime_items(self, raw_items: list[dict]) -> int:
@@ -370,6 +423,74 @@ class NewsStream:
         )
         return stored
 
+    def refresh_newsletters(self) -> dict:
+        """Fetch newsletter emails, split into sections, and store as news_items.
+
+        No-op when the newsletter provider is not configured / enabled.
+        Safe to call concurrently with refresh() — items flow through the
+        same catalog + export + RAG path, keyed on `mailto://` link hashes.
+        """
+        results = {"fetched": 0, "stored": 0, "duplicates": 0, "errors": []}
+        if self.newsletter is None:
+            return results
+
+        try:
+            raw_items = self.newsletter.fetch()
+        except Exception as exc:
+            logger.warning("Newsletter fetch failed: %s", exc)
+            results["errors"].append(f"newsletter: {exc}")
+            return results
+
+        results["fetched"] = len(raw_items)
+        if not raw_items:
+            return results
+
+        # Seed deduplicator from recent catalog titles
+        dedup = Deduplicator(threshold=self._dedup_threshold)
+        recent_titles = self.catalog.get_recent_titles(
+            source="news", hours=self._dedup_lookback,
+        )
+        dedup.seed(recent_titles)
+
+        pending_items: list[tuple[FeedInfo, dict]] = []
+        for nl_item in raw_items:
+            item = {
+                "item_id": nl_item.item_id,
+                "source": nl_item.source,
+                "title": nl_item.title,
+                "description": nl_item.description,
+                "link": nl_item.link,
+                "published": nl_item.published,
+                "fetched_at": nl_item.fetched_at,
+                "feed_category": nl_item.feed_category,
+            }
+
+            if dedup.is_duplicate(item["title"]):
+                results["duplicates"] += 1
+                continue
+            sha = _news_sha256(item["link"])
+            if self.catalog.has(sha):
+                results["duplicates"] += 1
+                continue
+
+            feed = FeedInfo(name=item["source"], url="", category="newsletter")
+            pending_items.append((feed, item))
+
+        if not pending_items:
+            return results
+
+        if self._llm_settings:
+            stored = asyncio.run(self._process_items_llm(pending_items, results))
+        else:
+            stored = self._process_items_keyword(pending_items, results)
+        results["stored"] = stored
+
+        logger.info(
+            "Newsletter refresh: fetched=%d stored=%d duplicates=%d",
+            results["fetched"], results["stored"], results["duplicates"],
+        )
+        return results
+
     def _process_items_keyword(
         self,
         items: list[tuple[FeedInfo, dict]],
@@ -443,6 +564,31 @@ class NewsStream:
             result["fetched"], result["stored"], len(result["errors"]),
         )
         return result
+
+    def _log_paywall_health(self) -> None:
+        """Log paywall fetcher stats after a refresh cycle.
+
+        Surfaces session-expiry suspicions so operators know to rerun
+        paywall_login before too many cycles degrade to RSS snippets.
+        """
+        pf = getattr(self.article_fetcher, "_paywall_fetcher", None)
+        stats = getattr(pf, "stats", None)
+        if not stats or stats.attempts == 0:
+            return
+
+        logger.info(
+            "Paywall fetcher: attempts=%d ok=%d fail=%d "
+            "expiry_suspected=%d wayback_ok=%d wayback_fail=%d rss_fallback=%d",
+            stats.attempts, stats.playwright_ok, stats.playwright_fail,
+            stats.session_expiry_suspected, stats.wayback_ok,
+            stats.wayback_fail, stats.rss_fallback,
+        )
+        if stats.suspected_domains:
+            logger.warning(
+                "Paywall session likely expired for: %s — "
+                "rerun: python -m src.paywall_login https://<domain>",
+                ", ".join(sorted(stats.suspected_domains)),
+            )
 
     def _is_in_cooldown(self, feed_name: str) -> bool:
         """Check if a feed is in cooldown after repeated failures."""
@@ -561,5 +707,7 @@ class NewsStream:
         self.telegram.close()
         self.article_fetcher.close()
         self.summarizer.close()
+        if self._newsletter_state is not None:
+            self._newsletter_state.close()
         self.sync_store.close()
         self.catalog.close()
