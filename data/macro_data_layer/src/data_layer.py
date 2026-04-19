@@ -14,6 +14,7 @@ from .storage import Storage
 from .registry import Registry
 from .providers.fred import FREDProvider
 from .providers.fedwatch import FedWatchProvider
+from .providers.ny_fed_rates import NYFedRatesProvider
 from .vix_regime import classify_vix_regime
 
 logger = logging.getLogger(__name__)
@@ -120,6 +121,20 @@ class MacroDataLayer:
 
         return self.storage.read_series(series_key, start, end)
 
+    def _apply_regime_if_vix(self, indicator: str, series_key: str, df: pd.DataFrame) -> None:
+        """Compute + persist VIX regime labels for every row in *df*.
+
+        Called from both refresh and bootstrap so historical rows never land
+        with null regime after a first-time load.
+        """
+        if indicator != "VIX" or df.empty:
+            return
+        rows = [
+            (str(row["date"])[:10], classify_vix_regime(row["value"]))
+            for _, row in df.iterrows()
+        ]
+        self.storage.update_regime(series_key, rows)
+
     def _fetch_transformed(self, info, start, end, units) -> pd.DataFrame:
         """Fetch series with a FRED units transformation (not cached)."""
         return self.fred.fetch_with_retry(
@@ -158,12 +173,7 @@ class MacroDataLayer:
 
             if not df.empty:
                 self.storage.upsert_series(series_key, df)
-                if indicator == "VIX":
-                    regime_rows = [
-                        (str(row["date"])[:10], classify_vix_regime(row["value"]))
-                        for _, row in df.iterrows()
-                    ]
-                    self.storage.update_regime(series_key, regime_rows)
+                self._apply_regime_if_vix(indicator, series_key, df)
 
             new_last = self.storage.get_last_date(series_key)
             self.storage.update_sync(series_key, new_last)
@@ -300,6 +310,7 @@ class MacroDataLayer:
                 df = self.fred.fetch_with_retry(self.fred.fetch_series, info.fred_series_id)
                 if not df.empty:
                     self.storage.upsert_series(series_key, df)
+                    self._apply_regime_if_vix(info.canonical_name, series_key, df)
                     last_date = self.storage.get_last_date(series_key)
                     self.storage.update_sync(series_key, last_date)
                     results["series_loaded"] += 1
@@ -330,6 +341,48 @@ class MacroDataLayer:
 
         logger.info("Bootstrap complete: %d series, %d vintages, %d errors",
                      results["series_loaded"], results["vintages_loaded"], len(results["errors"]))
+        return results
+
+    def refresh_ny_fed_rates(
+        self,
+        series_ids: list[str] | None = None,
+        *,
+        provider: NYFedRatesProvider | None = None,
+        start: str | None = None,
+        end: str | None = None,
+    ) -> dict:
+        """Pull NY Fed reference rates (SOFR/EFFR/OBFR) and upsert into
+        ``macro_series`` under ``series_key=<ID>:US`` with ``source='NY_FED'``.
+
+        Series_id strings land in ``macro_series.series_id`` so the
+        ``ny_fed_series`` subject aliases surface rows via the cross-source
+        query without any further plumbing.
+        """
+        provider = provider or NYFedRatesProvider()
+        targets = [s.upper() for s in (series_ids or ["SOFR", "EFFR", "OBFR"])]
+
+        results = {"refreshed": 0, "failed": 0, "errors": []}
+        for sid in targets:
+            series_key = f"{sid}:US"
+            try:
+                last = self.storage.get_last_date(series_key)
+                fetch_start = start
+                if last and not start:
+                    fetch_start = (
+                        pd.Timestamp(last) - pd.Timedelta(days=5)
+                    ).strftime("%Y-%m-%d")
+                df = provider.fetch_with_retry(
+                    provider.fetch_series, sid, start=fetch_start, end=end,
+                )
+                if not df.empty:
+                    self.storage.upsert_series(series_key, df)
+                last_date = self.storage.get_last_date(series_key)
+                self.storage.update_sync(series_key, last_date)
+                results["refreshed"] += 1
+            except Exception as exc:
+                results["failed"] += 1
+                results["errors"].append(f"{sid}: {exc}")
+                self.storage.update_sync(series_key, error=True)
         return results
 
     def refresh_fedwatch(self, provider: FedWatchProvider | None = None) -> dict:

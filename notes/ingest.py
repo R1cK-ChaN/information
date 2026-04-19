@@ -62,7 +62,10 @@ def parse_note(path: Path) -> tuple[dict[str, Any], str]:
     fm_text = rest[:end]
     body = rest[end + len(_FRONTMATTER_RE_FENCE) + 1:].lstrip("\n")
 
-    fm = yaml.safe_load(fm_text) or {}
+    try:
+        fm = yaml.safe_load(fm_text) or {}
+    except yaml.YAMLError as exc:
+        raise ValueError(f"{path}: malformed YAML frontmatter: {exc}") from exc
     if not isinstance(fm, dict):
         raise ValueError(f"{path}: frontmatter must be a mapping")
 
@@ -95,7 +98,10 @@ def ingest_notes(
             stats["failed"] += 1
             continue
 
-        sha = hashlib.sha256(body.encode("utf-8")).hexdigest()
+        # Hash the full file (frontmatter + body) so editing only the
+        # subject_id / title / date forces a fresh catalog row instead of
+        # silently skipping the note.
+        sha = hashlib.sha256(md.read_bytes()).hexdigest()
         if catalog.has(sha):
             stats["skipped"] += 1
             continue

@@ -114,15 +114,25 @@ def create_app(
         limit: int = Query(50, ge=1, le=500),
     ):
         # BM25 text search via FTS5. `q` narrows to catalog rows only —
-        # calendar/macro have no indexable body.
+        # calendar/macro have no indexable body. Over-fetch then apply the
+        # same post-filter pass as the non-q branch so filters compose.
         if q:
+            post_filters = dict(
+                impact_level=impact_level,
+                market=market,
+                asset_class=asset_class,
+                sector=sector,
+                institution=institution,
+                event_type=event_type,
+            )
             rows = catalog.search_fts(
                 q,
-                limit=limit,
+                limit=limit * 5,
                 subject_id=subject,
                 min_confidence=min_confidence,
             )
-            return JSONResponse(rows)
+            filtered = [r for r in rows if matches_filter(r, **post_filters)]
+            return JSONResponse(filtered[:limit])
 
         # Subject-scoped cross-source query (catalog + calendar + macro_data).
         if subject:

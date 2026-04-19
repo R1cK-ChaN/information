@@ -91,3 +91,41 @@ def test_empty_response(monkeypatch):
     df = p.fetch_series("SOFR", start="2099-01-01", end="2099-01-02")
     assert df.empty
     assert set(df.columns) == {"date", "value", "source", "series_id"}
+
+
+class TestMacroDataLayerIntegration:
+    def test_refresh_ny_fed_rates_writes_macro_series(self, tmp_path, monkeypatch):
+        """MacroDataLayer.refresh_ny_fed_rates persists SOFR/EFFR/OBFR rows
+        into macro_series under series_id=<ID>, source='NY_FED', so the
+        ny_fed_series alias route can surface them at query time."""
+        import yaml
+        db_path = tmp_path / "m.db"
+        cfg = {
+            "storage": {"sqlite_path": str(db_path)},
+            "providers": {"fred": {"api_key_env": "FRED_API_KEY"}},
+            "ttl": {},
+        }
+        cfg_path = tmp_path / "cfg.yaml"
+        cfg_path.write_text(yaml.safe_dump(cfg))
+        monkeypatch.setenv("FRED_API_KEY", "fake")
+        monkeypatch.setattr(
+            "src.providers.ny_fed_rates.urllib.request.urlopen",
+            _mock_urlopen_factory(_FIXTURES),
+        )
+
+        from src.data_layer import MacroDataLayer
+        dl = MacroDataLayer(config_path=cfg_path)
+        out = dl.refresh_ny_fed_rates(["SOFR", "EFFR", "OBFR"])
+        assert out["refreshed"] == 3
+        assert out["failed"] == 0
+
+        rows = dl.storage.conn.execute(
+            "SELECT series_key, series_id, source, COUNT(*) "
+            "FROM macro_series GROUP BY series_key ORDER BY series_key"
+        ).fetchall()
+        keys = {r[0] for r in rows}
+        assert keys == {"SOFR:US", "EFFR:US", "OBFR:US"}
+        for _, sid, src, _count in rows:
+            assert src == "NY_FED"
+            assert sid in {"SOFR", "EFFR", "OBFR"}
+        dl.close()

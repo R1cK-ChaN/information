@@ -62,7 +62,7 @@ class NYFedRatesProvider(BaseProvider):
 
         params = {
             "startDate": start or "2014-01-01",
-            "endDate": end or pd.Timestamp.utcnow().strftime("%Y-%m-%d"),
+            "endDate": end or pd.Timestamp.now(tz="UTC").strftime("%Y-%m-%d"),
         }
         url = f"{_BASE}/{_PATHS[sid]}?{urllib.parse.urlencode(params)}"
         payload = self._fetch_json(url)

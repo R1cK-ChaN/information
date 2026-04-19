@@ -55,7 +55,10 @@ def save_to_catalog(catalog: Catalog, result: dict, json_path: Path) -> None:
             if conf > merged.get(sid, 0.0):
                 merged[sid] = conf
         subjects = sorted(merged.items())
-    catalog.insert(result, json_path, subjects=subjects)
+    catalog.insert(
+        result, json_path, subjects=subjects,
+        body_text=result.get("markdown") or result.get("body") or result.get("text"),
+    )
 
 
 def list_results(extraction_path: Path) -> list[dict]:

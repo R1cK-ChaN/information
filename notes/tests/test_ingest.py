@@ -48,6 +48,14 @@ class TestParseNote:
         with pytest.raises(ValueError, match="subject_id"):
             parse_note(p)
 
+    def test_malformed_yaml_becomes_value_error(self, tmp_path):
+        # Unterminated flow sequence triggers a yaml.YAMLError — must surface
+        # as ValueError so the ingest loop's except clause can catch it.
+        text = "---\ntitle: [oops\n---\nbody"
+        p = _write(tmp_path / "n.md", text)
+        with pytest.raises(ValueError, match="malformed YAML"):
+            parse_note(p)
+
 
 class TestIngestNotes:
     def test_end_to_end_round_trip(self, tmp_path):
@@ -123,4 +131,55 @@ class TestIngestNotes:
         )
         assert stats["ingested"] == 1
         assert stats["failed"] == 1
+        catalog.close()
+
+    def test_malformed_yaml_does_not_abort_run(self, tmp_path):
+        """A yaml.YAMLError in one file used to propagate out of ingest_notes;
+        it must be caught and counted as failed alongside the surviving notes."""
+        input_dir = tmp_path / "in"
+        input_dir.mkdir()
+        _write(input_dir / "good.md", _SAMPLE)
+        _write(input_dir / "broken.md", "---\ntitle: [oops\n---\nbody")
+
+        catalog = Catalog(tmp_path / "cat.db")
+        stats = ingest_notes(
+            input_dir,
+            catalog=catalog,
+            output_root=tmp_path / "out",
+            export_root=tmp_path / "export",
+        )
+        assert stats["ingested"] == 1
+        assert stats["failed"] == 1
+        catalog.close()
+
+    def test_frontmatter_edit_triggers_reingest(self, tmp_path):
+        """Changing subject_id or title without touching the body must force a
+        new catalog row — the dedup key hashes the full file, not just the body."""
+        input_dir = tmp_path / "in"
+        input_dir.mkdir()
+        note = input_dir / "n.md"
+        _write(note, _SAMPLE)
+
+        catalog = Catalog(tmp_path / "cat.db")
+        opts = dict(
+            catalog=catalog,
+            output_root=tmp_path / "out",
+            export_root=tmp_path / "export",
+        )
+
+        ingest_notes(input_dir, **opts)
+        before = catalog.get_latest(10, source="notes")
+        assert len(before) == 1
+        assert before[0]["subject_id"] == "econ.cpi"
+
+        # Rewrite only the frontmatter; body is byte-identical.
+        _write(
+            note,
+            _SAMPLE.replace("subject_id: econ.cpi", "subject_id: econ.ppi"),
+        )
+        stats = ingest_notes(input_dir, **opts)
+        assert stats["ingested"] == 1  # a genuinely new row, not a skip
+
+        after = catalog.get_latest(10, source="notes")
+        assert {r["subject_id"] for r in after} >= {"econ.ppi"}
         catalog.close()
