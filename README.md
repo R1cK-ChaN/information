@@ -10,11 +10,13 @@ LLMs hallucinate. When an analyst agent needs to reason about CPI prints, FOMC d
 
 | Package | Purpose |
 |---------|---------|
-| **[data/macro_data_layer](data/macro_data_layer/)** | Structured macro time series (FRED, etc.). Provides clean numeric data for indicators like GDP, CPI, unemployment, yields. |
+| **[data/macro_data_layer](data/macro_data_layer/)** | Structured macro time series. FRED indicators (GDP, CPI, unemployment, yields), NY Fed reference rates (SOFR / EFFR / OBFR), CME-equivalent FedWatch rate expectations, and a VIX regime classifier stored alongside each print. |
 | **[doc_parser](doc_parser/)** | PDF/document parsing pipeline. Ingests broker research, policy reports, and other PDFs via OCR (TextIn), then runs LLM entity extraction to produce structured JSON with 17 standardized fields. |
 | **[gov_report](gov_report/)** | Government report crawler. Fetches official economic releases from BLS, Fed, BEA, ISM, NBS, PBOC, and other US/CN agencies. Converts HTML to markdown, runs the same LLM extraction as doc_parser, stores results in identical JSON schema. |
-| **[news](news/)** | Financial news stream. Aggregates headlines from RSS feeds, classifies by topic/impact, deduplicates via Jaccard similarity, and writes structured JSON inline during refresh. |
-| **[widgets](widgets/)** | Shared utilities. Provides the `Catalog` SQLite index used by all packages for dedup and querying. |
+| **[news](news/)** | Financial news stream. Aggregates headlines from RSS + Telegram + IMAP newsletters, classifies by topic/impact, deduplicates via Jaccard similarity, tags each item against the shared subject vocabulary, and serves FTS5 + subject-scoped queries at `GET /items`. Also exposes an ad-hoc `discovery` helper (Brave search + httpx fetch with paywall fallback) for chasing referenced sources during ingestion. |
+| **[notes](notes/)** | Research-notes artifact store. Drop frontmatter-tagged markdown files into an input folder; the CLI ingests them into the catalog under `source='notes'`, exports sha-named copies to `6_information_layer/notes/`, and indexes the body into the FTS search. |
+| **[calendar](calendar/)** | Economic-calendar scraper (Investing.com). Stores upcoming releases with `indicator`, `country`, `importance`, `actual`, `forecast`, `previous` — surfaced alongside news/macro rows by the cross-source subject query. |
+| **[widgets](widgets/)** | Shared utilities. Provides the `Catalog` SQLite index (plus FTS5 and subject tagging tables), the `SubjectTagger` that maps source-native identifiers to canonical `subject_id`s, and the YAML vocabulary loader. |
 
 ## Data Flow
 
@@ -60,6 +62,17 @@ Every extracted document produces a JSON with these entity fields:
 
 Plus full `markdown` content, `parse_info`, and `extraction_info`.
 
+## Subject Tagging & Cross-Source Query
+
+A single canonical vocabulary in [`config/subjects.yaml`](config/subjects.yaml) binds news, newsletters, gov reports, calendar events, notes, and macro series to the same `subject_id` (e.g. `econ.cpi`, `rate.us.sofr`, `rate.us.fedwatch`, `vol.vix`). Source-native identifiers — FRED series, NY Fed rate names, calendar `indicator` strings, and news title regex — resolve through alias tables at ingest time, so an agent asking for "CPI" gets the same subject regardless of which package wrote the row.
+
+The catalog exposes two composable HTTP queries on the news API:
+
+- `GET /items?subject=econ.cpi` — merged view across catalog + calendar + macro data, ranked by recency.
+- `GET /items?q=<text>` — BM25 full-text search over `title + body` via SQLite FTS5, composable with `subject=` and the existing filters (`impact_level`, `market`, `institution`, ...).
+
+Notes, FedWatch forward curves, and NY Fed rate snapshots all feed into these queries through their subject aliases — no per-source plumbing required.
+
 ## Quick Start
 
 ```bash
@@ -83,6 +96,13 @@ doc-parser process /path/to/report.pdf
 
 # Check fetch history
 gov-report status
+
+# Ingest research notes (drop *.md with frontmatter into 6_information_layer/notes_input/)
+python -m notes.ingest
+
+# Pull NY Fed reference rates (SOFR/EFFR/OBFR) + FedWatch forward curve
+python -c "from src.data_layer import MacroDataLayer; dl=MacroDataLayer(); \
+  dl.refresh_ny_fed_rates(); dl.refresh_fedwatch()"
 ```
 
 ---
