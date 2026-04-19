@@ -37,6 +37,27 @@ CREATE TABLE IF NOT EXISTS items (
 CREATE INDEX IF NOT EXISTS idx_source       ON items(source);
 CREATE INDEX IF NOT EXISTS idx_publish_date ON items(publish_date);
 CREATE INDEX IF NOT EXISTS idx_impact_level ON items(impact_level);
+
+CREATE TABLE IF NOT EXISTS subjects (
+    subject_id   TEXT PRIMARY KEY,
+    display_name TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS subject_aliases (
+    subject_id  TEXT NOT NULL,
+    alias_type  TEXT NOT NULL,
+    alias_value TEXT NOT NULL,
+    PRIMARY KEY (subject_id, alias_type, alias_value)
+);
+CREATE INDEX IF NOT EXISTS idx_aliases_lookup
+    ON subject_aliases(alias_type, alias_value);
+CREATE TABLE IF NOT EXISTS item_subjects (
+    item_sha   TEXT NOT NULL,
+    subject_id TEXT NOT NULL,
+    confidence REAL NOT NULL,
+    PRIMARY KEY (item_sha, subject_id)
+);
+CREATE INDEX IF NOT EXISTS idx_item_subjects_subject
+    ON item_subjects(subject_id);
 """
 
 
@@ -63,43 +84,65 @@ class Catalog:
 
     # -- Write ---------------------------------------------------------------
 
-    def insert(self, result: dict, json_path: str | Path) -> None:
+    def insert(
+        self,
+        result: dict,
+        json_path: str | Path,
+        *,
+        subjects: list[tuple[str, float]] | None = None,
+    ) -> None:
         """Insert a result dict into the catalog.
 
-        *result* must contain a ``sha256`` key.  All 17 entity fields are
+        *result* must contain a ``sha256`` key.  All entity fields are
         read from the dict (missing keys default to ``None``).
+
+        *subjects* is an optional list of ``(subject_id, confidence)`` tuples
+        to populate the ``item_subjects`` join table in the same transaction.
+        Existing tags for this sha are replaced.
         """
-        self._conn.execute(
-            """INSERT OR REPLACE INTO items
-               (sha256, json_path, source, title, institution, publish_date,
-                data_period, country, market, asset_class, sector,
-                document_type, event_type, subject, subject_id, language,
-                contains_commentary, impact_level, confidence, processed_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (
-                result["sha256"],
-                str(json_path),
-                result.get("source"),
-                result.get("title"),
-                result.get("institution"),
-                result.get("publish_date"),
-                result.get("data_period"),
-                result.get("country"),
-                result.get("market"),
-                result.get("asset_class"),
-                result.get("sector"),
-                result.get("document_type"),
-                result.get("event_type"),
-                result.get("subject"),
-                result.get("subject_id"),
-                result.get("language"),
-                1 if result.get("contains_commentary") else 0,
-                result.get("impact_level"),
-                result.get("confidence"),
-                result.get("processed_at"),
-            ),
-        )
-        self._conn.commit()
+        with self._conn:
+            self._conn.execute(
+                """INSERT OR REPLACE INTO items
+                   (sha256, json_path, source, title, institution, publish_date,
+                    data_period, country, market, asset_class, sector,
+                    document_type, event_type, subject, subject_id, language,
+                    contains_commentary, impact_level, confidence, processed_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    result["sha256"],
+                    str(json_path),
+                    result.get("source"),
+                    result.get("title"),
+                    result.get("institution"),
+                    result.get("publish_date"),
+                    result.get("data_period"),
+                    result.get("country"),
+                    result.get("market"),
+                    result.get("asset_class"),
+                    result.get("sector"),
+                    result.get("document_type"),
+                    result.get("event_type"),
+                    result.get("subject"),
+                    result.get("subject_id"),
+                    result.get("language"),
+                    1 if result.get("contains_commentary") else 0,
+                    result.get("impact_level"),
+                    result.get("confidence"),
+                    result.get("processed_at"),
+                ),
+            )
+            if subjects is not None:
+                self._conn.execute(
+                    "DELETE FROM item_subjects WHERE item_sha = ?",
+                    (result["sha256"],),
+                )
+                if subjects:
+                    self._conn.executemany(
+                        """INSERT INTO item_subjects
+                           (item_sha, subject_id, confidence)
+                           VALUES (?,?,?)""",
+                        [(result["sha256"], sid, conf) for sid, conf in subjects],
+                    )
 
     # -- Read ----------------------------------------------------------------
 
@@ -164,6 +207,85 @@ class Catalog:
         )
         self._conn.commit()
         return cur.rowcount > 0
+
+    # -- Subjects ------------------------------------------------------------
+
+    def sync_subjects(
+        self,
+        subjects: list[dict],
+    ) -> None:
+        """Sync the subject vocabulary into the catalog.
+
+        *subjects* is the list of dicts parsed from ``config/subjects.yaml``
+        (each with ``id``, ``display``, ``aliases``). Replaces any existing
+        rows for each subject. Subjects not in the input are left alone —
+        deleting subjects is intentionally manual.
+        """
+        with self._conn:
+            for sub in subjects:
+                sid = sub["id"]
+                self._conn.execute(
+                    "INSERT OR REPLACE INTO subjects (subject_id, display_name) VALUES (?, ?)",
+                    (sid, sub["display"]),
+                )
+                self._conn.execute(
+                    "DELETE FROM subject_aliases WHERE subject_id = ?",
+                    (sid,),
+                )
+                rows: list[tuple[str, str, str]] = []
+                for alias_type, values in (sub.get("aliases") or {}).items():
+                    for v in values or []:
+                        rows.append((sid, alias_type, v))
+                if rows:
+                    self._conn.executemany(
+                        """INSERT OR IGNORE INTO subject_aliases
+                           (subject_id, alias_type, alias_value) VALUES (?,?,?)""",
+                        rows,
+                    )
+
+    def get_aliases(
+        self, subject_id: str, alias_type: str | None = None
+    ) -> list[str]:
+        """Return alias values for a subject, optionally filtered by type."""
+        if alias_type:
+            rows = self._conn.execute(
+                """SELECT alias_value FROM subject_aliases
+                   WHERE subject_id = ? AND alias_type = ?""",
+                (subject_id, alias_type),
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT alias_value FROM subject_aliases WHERE subject_id = ?",
+                (subject_id,),
+            ).fetchall()
+        return [r[0] for r in rows]
+
+    def get_items_by_subject(
+        self,
+        subject_id: str,
+        *,
+        min_confidence: float = 0.0,
+        limit: int = 100,
+    ) -> list[dict]:
+        """Return catalog items tagged with *subject_id*, ordered by recency."""
+        rows = self._conn.execute(
+            """SELECT items.*, item_subjects.confidence AS subject_confidence
+               FROM items
+               JOIN item_subjects ON items.sha256 = item_subjects.item_sha
+               WHERE item_subjects.subject_id = ?
+                 AND item_subjects.confidence >= ?
+               ORDER BY items.processed_at DESC
+               LIMIT ?""",
+            (subject_id, min_confidence, limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def list_subjects(self) -> list[dict]:
+        """Return all subjects with their display names."""
+        rows = self._conn.execute(
+            "SELECT subject_id, display_name FROM subjects ORDER BY subject_id"
+        ).fetchall()
+        return [dict(r) for r in rows]
 
     def close(self) -> None:
         self._conn.close()
