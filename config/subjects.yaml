@@ -124,6 +124,7 @@ subjects:
       title_regex:
         - '\b2[- ]?year (?:treasury|yield|note)\b'
         - '\btwo[- ]year (?:treasury|yield|note)\b'
+        - '\b2Y\b'
 
   - id: rate.us.10y
     display: "US 10Y Treasury Yield"
@@ -133,6 +134,7 @@ subjects:
       title_regex:
         - '\b10[- ]?year (?:treasury|yield|note)\b'
         - '\bten[- ]year (?:treasury|yield|note)\b'
+        - '\b10Y\b'
 
   # ----- Volatility & FX -----
 

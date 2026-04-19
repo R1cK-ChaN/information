@@ -14,6 +14,7 @@ from widgets.tagger import SubjectTagger
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SEED_YAML = REPO_ROOT / "config" / "subjects.yaml"
+GOLDEN_PATH = REPO_ROOT / "tests" / "golden_tags.jsonl"
 
 
 @pytest.fixture
@@ -222,3 +223,118 @@ class TestCatalogSubjectsIntegration:
         items = seeded_catalog.get_items_by_subject("econ.us.cpi")
         assert items[0]["sha256"] == "g" * 64
         assert items[1]["sha256"] == "f" * 64
+
+
+# ----- Golden-set regression ------------------------------------------------
+
+
+class TestGoldenSet:
+    """Runs the tagger against hand-tagged fixtures in tests/golden_tags.jsonl.
+
+    For each line, the tagger's output subject set must equal the expected
+    set exactly (no missing hits, no extra hits). Expand the fixture when a
+    real-world false positive or negative is observed; fix the regex first.
+    """
+
+    def _cases(self):
+        import json
+        with GOLDEN_PATH.open() as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                yield json.loads(line)
+
+    def test_golden_tags_match(self, tagger):
+        failures = []
+        for case in self._cases():
+            title = case["title"]
+            expected = set(case["expected_subjects"])
+            actual = {sid for sid, _ in tagger.tag_text(title)}
+            if actual != expected:
+                failures.append((title, sorted(expected), sorted(actual)))
+        if failures:
+            msg = "\n".join(
+                f"  title={t!r}  expected={e}  got={g}" for t, e, g in failures
+            )
+            pytest.fail(f"{len(failures)} golden-tag mismatches:\n{msg}")
+
+
+# ----- Backfill script ------------------------------------------------------
+
+
+class TestBackfill:
+    def test_backfill_tags_pre_existing_rows(self, tmp_path):
+        """Items inserted before tagging are picked up by backfill_subjects."""
+        import sys
+        sys.path.insert(0, str(REPO_ROOT / "scripts"))
+        from backfill_subjects import backfill
+
+        cat = Catalog(tmp_path / "c.db")
+        # Insert untagged rows (simulating pre-tagger history).
+        cat.insert(
+            {"sha256": "a" * 64, "title": "CPI higher", "processed_at": 1},
+            "/tmp/a.json",
+        )
+        cat.insert(
+            {
+                "sha256": "b" * 64,
+                "title": "unrelated",
+                "processed_at": 2,
+                "subject_id": "CPIAUCSL",
+            },
+            "/tmp/b.json",
+        )
+        cat.insert(
+            {"sha256": "c" * 64, "title": "quiet day", "processed_at": 3},
+            "/tmp/c.json",
+        )
+
+        sync_from_yaml(cat, SEED_YAML)
+        tagger = SubjectTagger(cat)
+
+        stats = backfill(cat, tagger, dry_run=False)
+        assert stats["total"] == 3
+        assert stats["tagged"] == 2  # 'a' via title, 'b' via FRED series_id
+        cpi_items = cat.get_items_by_subject("econ.us.cpi")
+        shas = {it["sha256"] for it in cpi_items}
+        assert shas == {"a" * 64, "b" * 64}
+        cat.close()
+
+    def test_backfill_skips_already_tagged(self, tmp_path):
+        import sys
+        sys.path.insert(0, str(REPO_ROOT / "scripts"))
+        from backfill_subjects import backfill
+
+        cat = Catalog(tmp_path / "c.db")
+        sync_from_yaml(cat, SEED_YAML)
+        tagger = SubjectTagger(cat)
+
+        cat.insert(
+            {"sha256": "a" * 64, "title": "CPI higher", "processed_at": 1},
+            "/tmp/a.json",
+            subjects=[("econ.us.cpi", 0.8)],
+        )
+        stats = backfill(cat, tagger, dry_run=False)
+        assert stats["skipped_already"] == 1
+        assert stats["tagged"] == 0
+        cat.close()
+
+    def test_backfill_dry_run_writes_nothing(self, tmp_path):
+        import sys
+        sys.path.insert(0, str(REPO_ROOT / "scripts"))
+        from backfill_subjects import backfill
+
+        cat = Catalog(tmp_path / "c.db")
+        cat.insert(
+            {"sha256": "a" * 64, "title": "CPI higher", "processed_at": 1},
+            "/tmp/a.json",
+        )
+        sync_from_yaml(cat, SEED_YAML)
+        tagger = SubjectTagger(cat)
+
+        stats = backfill(cat, tagger, dry_run=True)
+        assert stats["tagged"] == 1
+        # No rows in item_subjects after dry-run.
+        assert cat.get_items_by_subject("econ.us.cpi") == []
+        cat.close()

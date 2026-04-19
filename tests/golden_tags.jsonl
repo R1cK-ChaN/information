@@ -1,0 +1,40 @@
+{"title": "US CPI rises to 3.2% in June", "expected_subjects": ["econ.us.cpi"]}
+{"title": "Core CPI cools to 3.1% as shelter moderates", "expected_subjects": ["econ.us.cpi"]}
+{"title": "Headline inflation picks up, consumer prices climb 0.3%", "expected_subjects": ["econ.us.cpi"]}
+{"title": "PPI shocks to upside on energy rebound", "expected_subjects": ["econ.us.ppi"]}
+{"title": "Producer price index higher than forecast", "expected_subjects": ["econ.us.ppi"]}
+{"title": "Core PCE edges lower, Fed's preferred gauge cools", "expected_subjects": ["econ.us.core_pce"]}
+{"title": "Personal consumption expenditures rise 0.2%", "expected_subjects": ["econ.us.core_pce"]}
+{"title": "Nonfarm payrolls surge to 300k in July", "expected_subjects": ["econ.us.nfp"]}
+{"title": "NFP headline beats, wage growth stays hot", "expected_subjects": ["econ.us.nfp"]}
+{"title": "Jobs report blows past estimates", "expected_subjects": ["econ.us.nfp"]}
+{"title": "Unemployment rate ticks down to 3.8%", "expected_subjects": ["econ.us.unemployment"]}
+{"title": "Jobless rate holds at 4.0% in latest print", "expected_subjects": ["econ.us.unemployment"]}
+{"title": "US GDP grows 2.4% annualized in Q2", "expected_subjects": ["econ.us.gdp"]}
+{"title": "Gross domestic product surprises to the upside", "expected_subjects": ["econ.us.gdp"]}
+{"title": "Retail sales disappoint as consumers retrench", "expected_subjects": ["econ.us.retail_sales"]}
+{"title": "FOMC holds rates steady, signals two more cuts in 2025", "expected_subjects": ["rate.us.fed_funds"]}
+{"title": "Fed funds futures price 50% chance of July cut", "expected_subjects": ["rate.us.fed_funds"]}
+{"title": "Federal funds rate target range unchanged", "expected_subjects": ["rate.us.fed_funds"]}
+{"title": "ECB cuts deposit rate to 3.25% as expected", "expected_subjects": ["rate.eu.ecb_depo"]}
+{"title": "European Central Bank signals caution on further easing", "expected_subjects": ["rate.eu.ecb_depo"]}
+{"title": "BOJ normalises policy, ends negative rates era", "expected_subjects": ["rate.jp.boj"]}
+{"title": "Bank of Japan surprises with 25bp hike", "expected_subjects": ["rate.jp.boj"]}
+{"title": "US 10-year treasury yield climbs above 4.5%", "expected_subjects": ["rate.us.10y"]}
+{"title": "2-year treasury yield inverts vs 10Y", "expected_subjects": ["rate.us.2y", "rate.us.10y"]}
+{"title": "Ten-year note auction tails by 1.5bp", "expected_subjects": ["rate.us.10y"]}
+{"title": "VIX spikes above 25 as geopolitics flare", "expected_subjects": ["vol.vix"]}
+{"title": "Volatility index signals complacency easing", "expected_subjects": ["vol.vix"]}
+{"title": "Dollar index DXY climbs to 105.5", "expected_subjects": ["fx.dxy"]}
+{"title": "Dollar Index pulls back from multi-month highs", "expected_subjects": ["fx.dxy"]}
+{"title": "WTI crude slips below $70 on demand worries", "expected_subjects": ["commodity.wti"]}
+{"title": "Brent crude tops $80 on supply concerns", "expected_subjects": ["commodity.brent"]}
+{"title": "Spot gold hits record high above $2,500", "expected_subjects": ["commodity.gold"]}
+{"title": "Gold futures extend rally on central-bank buying", "expected_subjects": ["commodity.gold"]}
+{"title": "AAPL beats on services revenue, iPhone sales soft", "expected_subjects": ["equity.us.aapl"]}
+{"title": "Apple unveils next-gen M5 chip", "expected_subjects": ["equity.us.aapl"]}
+{"title": "MSFT cloud revenue accelerates, Azure growth hits 33%", "expected_subjects": ["equity.us.msft"]}
+{"title": "Microsoft passes Apple in market cap", "expected_subjects": ["equity.us.aapl", "equity.us.msft"]}
+{"title": "Nvidia earnings crush estimates, datacenter explodes", "expected_subjects": ["equity.us.nvda"]}
+{"title": "NVDA guidance lifts entire AI semi complex", "expected_subjects": ["equity.us.nvda"]}
+{"title": "New restaurant opens in Brooklyn with standout reviews", "expected_subjects": []}
