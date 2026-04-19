@@ -19,6 +19,8 @@ from typing import Callable
 from bs4 import BeautifulSoup
 from markdownify import markdownify
 
+from ..discovery import extract_urls
+
 logger = logging.getLogger(__name__)
 
 
@@ -28,6 +30,11 @@ class NewsletterSection:
     anchor: str      # URL-safe section identifier, e.g. "money-stuff-2"
     title: str       # section heading (may be empty for single-section fallback)
     content: str     # markdown body
+    references: list[str] = None  # external URLs called out in the body
+
+    def __post_init__(self) -> None:
+        if self.references is None:
+            self.references = extract_urls(self.content, limit=20)
 
 
 _ANCHOR_SLUG_RE = re.compile(r"[^a-z0-9]+")

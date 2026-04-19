@@ -126,6 +126,91 @@ def test_item_detail_with_json(client, mock_catalog, tmp_path):
     assert data["markdown"] == "# Hello"
 
 
+def test_items_q_fts_search(hub, tmp_path):
+    """`GET /items?q=...` returns BM25-ranked FTS5 hits from the real catalog."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))  # repo root
+    from widgets.catalog import Catalog
+
+    catalog = Catalog(tmp_path / "cat.db")
+    catalog.insert(
+        {"sha256": "a" * 64, "title": "Fed raises rates on CPI surprise",
+         "processed_at": 1},
+        "/tmp/a.json",
+    )
+    catalog.insert(
+        {"sha256": "b" * 64, "title": "Equities rally, gold flat",
+         "processed_at": 2},
+        "/tmp/b.json",
+    )
+    app = create_app(hub, catalog)
+    client = TestClient(app)
+
+    resp = client.get("/items", params={"q": "CPI"})
+    assert resp.status_code == 200
+    rows = resp.json()
+    assert len(rows) == 1
+    assert rows[0]["sha256"] == "a" * 64
+    catalog.close()
+
+
+def test_items_q_composes_with_filters(hub, tmp_path):
+    """`q` must be combined with impact_level / institution / market, not
+    replace them — otherwise ?q=X&impact_level=high leaks low-impact rows."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+    from widgets.catalog import Catalog
+
+    catalog = Catalog(tmp_path / "cat.db")
+    catalog.insert(
+        {"sha256": "a" * 64, "title": "CPI hot", "impact_level": "high",
+         "institution": "Reuters", "processed_at": 1},
+        "/tmp/a.json",
+    )
+    catalog.insert(
+        {"sha256": "b" * 64, "title": "CPI meh", "impact_level": "low",
+         "institution": "Blog", "processed_at": 2},
+        "/tmp/b.json",
+    )
+    app = create_app(hub, catalog)
+    client = TestClient(app)
+
+    resp = client.get("/items", params={"q": "CPI", "impact_level": "high"})
+    rows = resp.json()
+    assert [r["sha256"] for r in rows] == ["a" * 64]
+
+    resp = client.get("/items", params={"q": "CPI", "institution": "Reuters"})
+    rows = resp.json()
+    assert [r["sha256"] for r in rows] == ["a" * 64]
+    catalog.close()
+
+
+def test_items_q_intersects_subject(hub, tmp_path):
+    """`q` and `subject` compose: FTS match AND tagged with the subject."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+    from widgets.catalog import Catalog
+
+    catalog = Catalog(tmp_path / "cat.db")
+    catalog.insert(
+        {"sha256": "a" * 64, "title": "CPI surprise", "processed_at": 1},
+        "/tmp/a.json",
+        subjects=[("econ.cpi", 1.0)],
+    )
+    catalog.insert(
+        {"sha256": "b" * 64, "title": "CPI mention untagged", "processed_at": 2},
+        "/tmp/b.json",
+        subjects=[],
+    )
+    app = create_app(hub, catalog)
+    client = TestClient(app)
+
+    resp = client.get("/items", params={"q": "CPI", "subject": "econ.cpi"})
+    rows = resp.json()
+    assert [r["sha256"] for r in rows] == ["a" * 64]
+    catalog.close()
+
+
 @pytest.mark.asyncio
 async def test_stream_receives_published_item():
     """Verify the SSE event generator yields published items."""

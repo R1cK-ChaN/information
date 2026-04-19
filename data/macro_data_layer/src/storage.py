@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS macro_series (
     source      TEXT NOT NULL,
     series_id   TEXT NOT NULL,
     updated_at  TEXT NOT NULL,
+    regime      TEXT,
     PRIMARY KEY (series_key, date)
 );
 CREATE INDEX IF NOT EXISTS idx_macro_key_date ON macro_series(series_key, date);
@@ -38,6 +39,18 @@ CREATE TABLE IF NOT EXISTS sync_log (
     refresh_count   INTEGER DEFAULT 0,
     error_count     INTEGER DEFAULT 0
 );
+
+CREATE TABLE IF NOT EXISTS fedwatch_snapshots (
+    snapshot_date TEXT NOT NULL,
+    meeting_date  TEXT NOT NULL,
+    implied_rate  REAL,
+    prob_move_pct REAL,
+    prob_is_cut   INTEGER,
+    change_bps    REAL,
+    PRIMARY KEY (snapshot_date, meeting_date)
+);
+CREATE INDEX IF NOT EXISTS idx_fedwatch_meeting
+    ON fedwatch_snapshots(meeting_date);
 """
 
 
@@ -55,7 +68,69 @@ class Storage:
 
     def _create_tables(self):
         self.conn.executescript(SCHEMA_SQL)
+        # Additive migration: existing pre-regime DBs get the column added here.
+        cols = {row[1] for row in self.conn.execute("PRAGMA table_info(macro_series)")}
+        if "regime" not in cols:
+            self.conn.execute("ALTER TABLE macro_series ADD COLUMN regime TEXT")
         self.conn.commit()
+
+    def upsert_fedwatch_snapshot(
+        self,
+        snapshot_date: str,
+        rows: list[tuple[str, float | None, float | None, bool, float | None]],
+    ) -> int:
+        """Upsert one FedWatch snapshot day.
+
+        Each row is ``(meeting_date, implied_rate, prob_move_pct, prob_is_cut,
+        change_bps)``. Replaces any existing rows for this snapshot_date.
+        """
+        self.conn.execute(
+            "DELETE FROM fedwatch_snapshots WHERE snapshot_date = ?",
+            (snapshot_date,),
+        )
+        self.conn.executemany(
+            """INSERT INTO fedwatch_snapshots
+               (snapshot_date, meeting_date, implied_rate, prob_move_pct,
+                prob_is_cut, change_bps)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            [
+                (snapshot_date, m, ir, pm, 1 if pc else 0, cb)
+                for m, ir, pm, pc, cb in rows
+            ],
+        )
+        self.conn.commit()
+        return len(rows)
+
+    def read_fedwatch_snapshot(self, snapshot_date: str) -> list[dict]:
+        """Return meeting rows for a given snapshot date, ordered by meeting."""
+        cur = self.conn.execute(
+            """SELECT meeting_date, implied_rate, prob_move_pct, prob_is_cut,
+                      change_bps
+               FROM fedwatch_snapshots
+               WHERE snapshot_date = ? ORDER BY meeting_date""",
+            (snapshot_date,),
+        )
+        return [
+            {
+                "meeting_date": r[0],
+                "implied_rate": r[1],
+                "prob_move_pct": r[2],
+                "prob_is_cut": bool(r[3]),
+                "change_bps": r[4],
+            }
+            for r in cur.fetchall()
+        ]
+
+    def update_regime(self, series_key: str, rows: list[tuple[str, str | None]]) -> int:
+        """Set the regime label for a list of ``(date, regime)`` rows on a series."""
+        if not rows:
+            return 0
+        self.conn.executemany(
+            "UPDATE macro_series SET regime = ? WHERE series_key = ? AND date = ?",
+            [(regime, series_key, date) for date, regime in rows],
+        )
+        self.conn.commit()
+        return len(rows)
 
     def upsert_series(self, series_key: str, df: pd.DataFrame) -> int:
         """Insert or replace rows into macro_series from a DataFrame.

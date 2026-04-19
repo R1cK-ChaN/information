@@ -165,3 +165,28 @@ def test_resolve_sha_prefix_empty_dir(tmp_path: Path):
     """Empty directory raises ValueError."""
     with pytest.raises(ValueError, match="No results found"):
         resolve_sha_prefix(tmp_path, "abc")
+
+
+def test_save_to_catalog_populates_fts_body(tmp_path: Path):
+    """save_to_catalog must pass result['markdown'] into catalog.insert as
+    body_text so /items?q= can match on body, not just title."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+    from widgets.catalog import Catalog
+    from doc_parser.storage import save_to_catalog
+
+    result = {
+        "sha256": SHA,
+        "title": "Quarterly wrap",
+        "markdown": "# Report\n\nTreasury yields rose on the CPI print.",
+        "processed_at": 1,
+    }
+    cat = Catalog(tmp_path / "cat.db")
+    save_to_catalog(cat, result, tmp_path / "r.json")
+
+    rows = cat.search_fts("treasury")
+    assert len(rows) == 1
+    assert rows[0]["sha256"] == SHA
+    # Title-only search still works.
+    assert cat.search_fts("quarterly")[0]["sha256"] == SHA
+    cat.close()

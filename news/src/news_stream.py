@@ -521,7 +521,10 @@ class NewsStream:
                 self.tagger.tag_text(result.get("title"))
                 if self.tagger is not None else None
             )
-            self.catalog.insert(result, json_path, subjects=subjects)
+            self.catalog.insert(
+                result, json_path, subjects=subjects,
+                body_text=result.get("markdown"),
+            )
             if self.on_store:
                 self.on_store(result)
             stored += 1
@@ -566,7 +569,10 @@ class NewsStream:
                     if conf > merged.get(sid, 0.0):
                         merged[sid] = conf
                 subjects = sorted(merged.items())
-            self.catalog.insert(result, json_path, subjects=subjects)
+            self.catalog.insert(
+                result, json_path, subjects=subjects,
+                body_text=result.get("markdown"),
+            )
             if self.on_store:
                 self.on_store(result)
             stored += 1

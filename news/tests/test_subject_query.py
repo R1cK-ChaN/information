@@ -170,3 +170,69 @@ class TestQueryBySubject:
             limit=2,
         )
         assert len(items) == 2
+
+
+class TestNyFedSeriesAliases:
+    """rate.us.sofr / effr / obfr use the ny_fed_series alias type; verify the
+    macro query surfaces rows stored with source='NY_FED'."""
+
+    def test_fedwatch_midpoint_routed_via_fedwatch_series(self, tmp_path):
+        catalog_path = tmp_path / "catalog.db"
+        macro_path = tmp_path / "macro.db"
+
+        catalog = Catalog(catalog_path)
+        sync_from_yaml(catalog, SEED_YAML)
+
+        mac = sqlite3.connect(str(macro_path))
+        mac.execute("""
+            CREATE TABLE macro_series (
+                series_key TEXT NOT NULL, date TEXT NOT NULL, value REAL,
+                source TEXT NOT NULL, series_id TEXT NOT NULL, updated_at TEXT NOT NULL,
+                PRIMARY KEY (series_key, date)
+            )""")
+        mac.execute(
+            "INSERT INTO macro_series VALUES (?,?,?,?,?,?)",
+            ("FEDWATCH_MIDPOINT:US", "2026-04-19", 3.625,
+             "RATEPROBABILITY", "FEDWATCH_MIDPOINT",
+             "2026-04-19T12:00:00+00:00"),
+        )
+        mac.commit()
+        mac.close()
+
+        items = query_by_subject(
+            catalog, "rate.us.fedwatch", macro_db_path=macro_path,
+        )
+        assert len(items) == 1
+        assert items[0]["source"] == "macro_data"
+        assert items[0]["raw"]["series_id"] == "FEDWATCH_MIDPOINT"
+        catalog.close()
+
+    def test_sofr_macro_row_routed_via_ny_fed_series(self, tmp_path):
+        catalog_path = tmp_path / "catalog.db"
+        macro_path = tmp_path / "macro.db"
+
+        catalog = Catalog(catalog_path)
+        sync_from_yaml(catalog, SEED_YAML)
+
+        mac = sqlite3.connect(str(macro_path))
+        mac.execute("""
+            CREATE TABLE macro_series (
+                series_key TEXT NOT NULL, date TEXT NOT NULL, value REAL,
+                source TEXT NOT NULL, series_id TEXT NOT NULL, updated_at TEXT NOT NULL,
+                PRIMARY KEY (series_key, date)
+            )""")
+        mac.execute(
+            "INSERT INTO macro_series VALUES (?,?,?,?,?,?)",
+            ("SOFR:US", "2024-11-15", 4.60, "NY_FED", "SOFR",
+             "2024-11-15T12:00:00+00:00"),
+        )
+        mac.commit()
+        mac.close()
+
+        items = query_by_subject(
+            catalog, "rate.us.sofr", macro_db_path=macro_path,
+        )
+        assert len(items) == 1
+        assert items[0]["source"] == "macro_data"
+        assert items[0]["raw"]["series_id"] == "SOFR"
+        catalog.close()

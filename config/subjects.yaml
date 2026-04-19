@@ -140,6 +140,42 @@ subjects:
         - '\bten[- ]year (?:treasury|yield|note)\b'
         - '\b10Y\b'
 
+  # ----- Reference rates (NY Fed) -----
+
+  - id: rate.us.sofr
+    display: "US SOFR"
+    aliases:
+      ny_fed_series: [SOFR]
+      title_regex:
+        - '\bSOFR\b'
+        - '\bsecured overnight financing rate\b'
+
+  - id: rate.us.effr
+    display: "US EFFR"
+    aliases:
+      ny_fed_series: [EFFR]
+      title_regex:
+        - '\bEFFR\b'
+        - '\beffective fed(?:eral)? funds rate\b'
+
+  - id: rate.us.obfr
+    display: "US OBFR"
+    aliases:
+      ny_fed_series: [OBFR]
+      title_regex:
+        - '\bOBFR\b'
+        - '\bovernight bank funding rate\b'
+
+  - id: rate.us.fedwatch
+    display: "US FedWatch (rate expectations)"
+    aliases:
+      fedwatch_series: [FEDWATCH_MIDPOINT]
+      title_regex:
+        - '\bFedWatch\b'
+        - '\brate expectation'
+        - '\bimplied (?:fed )?rate'
+        - '\bFOMC probabilit'
+
   # ----- Volatility & FX -----
 
   - id: vol.vix
