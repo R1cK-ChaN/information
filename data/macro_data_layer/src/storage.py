@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS macro_series (
     source      TEXT NOT NULL,
     series_id   TEXT NOT NULL,
     updated_at  TEXT NOT NULL,
+    regime      TEXT,
     PRIMARY KEY (series_key, date)
 );
 CREATE INDEX IF NOT EXISTS idx_macro_key_date ON macro_series(series_key, date);
@@ -55,7 +56,22 @@ class Storage:
 
     def _create_tables(self):
         self.conn.executescript(SCHEMA_SQL)
+        # Additive migration: existing pre-regime DBs get the column added here.
+        cols = {row[1] for row in self.conn.execute("PRAGMA table_info(macro_series)")}
+        if "regime" not in cols:
+            self.conn.execute("ALTER TABLE macro_series ADD COLUMN regime TEXT")
         self.conn.commit()
+
+    def update_regime(self, series_key: str, rows: list[tuple[str, str | None]]) -> int:
+        """Set the regime label for a list of ``(date, regime)`` rows on a series."""
+        if not rows:
+            return 0
+        self.conn.executemany(
+            "UPDATE macro_series SET regime = ? WHERE series_key = ? AND date = ?",
+            [(regime, series_key, date) for date, regime in rows],
+        )
+        self.conn.commit()
+        return len(rows)
 
     def upsert_series(self, series_key: str, df: pd.DataFrame) -> int:
         """Insert or replace rows into macro_series from a DataFrame.

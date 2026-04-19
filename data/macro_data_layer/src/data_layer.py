@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from .storage import Storage
 from .registry import Registry
 from .providers.fred import FREDProvider
+from .vix_regime import classify_vix_regime
 
 logger = logging.getLogger(__name__)
 
@@ -156,6 +157,12 @@ class MacroDataLayer:
 
             if not df.empty:
                 self.storage.upsert_series(series_key, df)
+                if indicator == "VIX":
+                    regime_rows = [
+                        (str(row["date"])[:10], classify_vix_regime(row["value"]))
+                        for _, row in df.iterrows()
+                    ]
+                    self.storage.update_regime(series_key, regime_rows)
 
             new_last = self.storage.get_last_date(series_key)
             self.storage.update_sync(series_key, new_last)
