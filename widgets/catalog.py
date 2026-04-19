@@ -58,6 +58,13 @@ CREATE TABLE IF NOT EXISTS item_subjects (
 );
 CREATE INDEX IF NOT EXISTS idx_item_subjects_subject
     ON item_subjects(subject_id);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS items_fts USING fts5(
+    sha256 UNINDEXED,
+    title,
+    body,
+    tokenize = 'porter unicode61'
+);
 """
 
 
@@ -72,6 +79,27 @@ class Catalog:
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.executescript(_SCHEMA)
+        self._backfill_fts_if_empty()
+
+    # -- FTS init ------------------------------------------------------------
+
+    def _backfill_fts_if_empty(self) -> None:
+        """Populate ``items_fts`` from ``items.title`` when the FTS index is
+        smaller than the catalog. Idempotent: no-op if counts already match.
+
+        Only the title is backfilled — older rows pre-date the ``body_text``
+        parameter on ``insert()``, so they have no indexable body.
+        """
+        fts_n = self._conn.execute("SELECT count(*) FROM items_fts").fetchone()[0]
+        items_n = self._conn.execute("SELECT count(*) FROM items").fetchone()[0]
+        if fts_n >= items_n:
+            return
+        with self._conn:
+            self._conn.execute("DELETE FROM items_fts")
+            self._conn.execute(
+                """INSERT INTO items_fts(sha256, title, body)
+                   SELECT sha256, COALESCE(title, ''), '' FROM items"""
+            )
 
     # -- Dedup ---------------------------------------------------------------
 
@@ -90,6 +118,7 @@ class Catalog:
         json_path: str | Path,
         *,
         subjects: list[tuple[str, float]] | None = None,
+        body_text: str | None = None,
     ) -> None:
         """Insert a result dict into the catalog.
 
@@ -99,6 +128,10 @@ class Catalog:
         *subjects* is an optional list of ``(subject_id, confidence)`` tuples
         to populate the ``item_subjects`` join table in the same transaction.
         Existing tags for this sha are replaced.
+
+        *body_text* is optional plaintext content indexed by ``items_fts``
+        alongside the title for BM25 search. If omitted, only the title is
+        searchable for this row.
         """
         with self._conn:
             self._conn.execute(
@@ -144,6 +177,15 @@ class Catalog:
                         [(result["sha256"], sid, conf) for sid, conf in subjects],
                     )
 
+            self._conn.execute(
+                "DELETE FROM items_fts WHERE sha256 = ?",
+                (result["sha256"],),
+            )
+            self._conn.execute(
+                "INSERT INTO items_fts(sha256, title, body) VALUES (?,?,?)",
+                (result["sha256"], result.get("title") or "", body_text or ""),
+            )
+
     # -- Read ----------------------------------------------------------------
 
     def get_latest(
@@ -174,6 +216,49 @@ class Catalog:
         ).fetchall()
         return [dict(r) for r in rows]
 
+    def search_fts(
+        self,
+        query_str: str,
+        *,
+        limit: int = 20,
+        subject_id: str | None = None,
+        min_confidence: float = 0.0,
+    ) -> list[dict]:
+        """BM25-ranked full-text search across ``title + body`` via FTS5.
+
+        *query_str* is phrase-quoted so arbitrary user text (including
+        punctuation or FTS operators) is treated as a literal phrase —
+        callers that want AND/OR/NEAR can build the MATCH expression
+        themselves and pass it through a dedicated API later.
+
+        *subject_id* optionally intersects the result with the ``item_subjects``
+        join table so ``q=`` composes with the existing ``subject=`` filter.
+        """
+        match_expr = '"' + query_str.replace('"', '""') + '"'
+        if subject_id is None:
+            rows = self._conn.execute(
+                """SELECT items.*, bm25(items_fts) AS fts_rank
+                   FROM items_fts
+                   JOIN items ON items.sha256 = items_fts.sha256
+                   WHERE items_fts MATCH ?
+                   ORDER BY fts_rank LIMIT ?""",
+                (match_expr, limit),
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                """SELECT items.*, bm25(items_fts) AS fts_rank,
+                          item_subjects.confidence AS subject_confidence
+                   FROM items_fts
+                   JOIN items         ON items.sha256         = items_fts.sha256
+                   JOIN item_subjects ON item_subjects.item_sha = items_fts.sha256
+                   WHERE items_fts MATCH ?
+                     AND item_subjects.subject_id = ?
+                     AND item_subjects.confidence >= ?
+                   ORDER BY fts_rank LIMIT ?""",
+                (match_expr, subject_id, min_confidence, limit),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
     def get_recent_titles(
         self, source: str | None = None, hours: int = 24
     ) -> list[str]:
@@ -202,10 +287,13 @@ class Catalog:
 
     def remove(self, sha256: str) -> bool:
         """Remove an item from the catalog. Returns True if deleted."""
-        cur = self._conn.execute(
-            "DELETE FROM items WHERE sha256 = ?", (sha256,)
-        )
-        self._conn.commit()
+        with self._conn:
+            cur = self._conn.execute(
+                "DELETE FROM items WHERE sha256 = ?", (sha256,)
+            )
+            self._conn.execute(
+                "DELETE FROM items_fts WHERE sha256 = ?", (sha256,)
+            )
         return cur.rowcount > 0
 
     # -- Subjects ------------------------------------------------------------

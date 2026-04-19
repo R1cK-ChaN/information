@@ -103,6 +103,7 @@ def create_app(
     @app.get("/items")
     async def items(
         subject: str | None = Query(None),
+        q: str | None = Query(None),
         min_confidence: float = Query(0.0, ge=0.0, le=1.0),
         impact_level: str | None = Query(None),
         market: str | None = Query(None),
@@ -112,6 +113,17 @@ def create_app(
         event_type: str | None = Query(None),
         limit: int = Query(50, ge=1, le=500),
     ):
+        # BM25 text search via FTS5. `q` narrows to catalog rows only —
+        # calendar/macro have no indexable body.
+        if q:
+            rows = catalog.search_fts(
+                q,
+                limit=limit,
+                subject_id=subject,
+                min_confidence=min_confidence,
+            )
+            return JSONResponse(rows)
+
         # Subject-scoped cross-source query (catalog + calendar + macro_data).
         if subject:
             rows = query_by_subject(

@@ -163,3 +163,91 @@ class TestRemove:
 
     def test_remove_nonexistent(self, catalog):
         assert catalog.remove("x" * 64) is False
+
+
+class TestSearchFts:
+    def test_title_match(self, catalog):
+        catalog.insert(_make_result(sha="a" * 64, title="Fed raises rates"), "/a.json")
+        catalog.insert(_make_result(sha="b" * 64, title="Gold surges"), "/b.json")
+        rows = catalog.search_fts("rates")
+        assert len(rows) == 1
+        assert rows[0]["title"] == "Fed raises rates"
+
+    def test_body_match(self, catalog):
+        catalog.insert(
+            _make_result(sha="a" * 64, title="Daily wrap"),
+            "/a.json",
+            body_text="Ten-year Treasury yield ticked up after the CPI print.",
+        )
+        catalog.insert(_make_result(sha="b" * 64, title="Equities flat"), "/b.json")
+        rows = catalog.search_fts("treasury")
+        assert len(rows) == 1
+        assert rows[0]["sha256"] == "a" * 64
+
+    def test_bm25_rank_order(self, catalog):
+        # Title hit outranks body hit because title is a stronger field.
+        catalog.insert(
+            _make_result(sha="a" * 64, title="CPI inflation jumps"),
+            "/a.json",
+            body_text="nothing relevant",
+        )
+        catalog.insert(
+            _make_result(sha="b" * 64, title="Market wrap"),
+            "/b.json",
+            body_text="A passing mention of cpi.",
+        )
+        rows = catalog.search_fts("cpi")
+        assert rows[0]["sha256"] == "a" * 64
+        assert rows[1]["sha256"] == "b" * 64
+
+    def test_subject_intersection(self, catalog):
+        catalog.insert(
+            _make_result(sha="a" * 64, title="CPI headline"),
+            "/a.json",
+            subjects=[("econ.cpi", 1.0)],
+        )
+        catalog.insert(
+            _make_result(sha="b" * 64, title="CPI aside"),
+            "/b.json",
+            subjects=[],  # no subject tag
+        )
+        rows = catalog.search_fts("CPI", subject_id="econ.cpi")
+        assert len(rows) == 1
+        assert rows[0]["sha256"] == "a" * 64
+
+    def test_fts_synced_on_update(self, catalog):
+        r = _make_result(sha="a" * 64, title="original headline")
+        catalog.insert(r, "/a.json")
+        r["title"] = "updated headline"
+        catalog.insert(r, "/a.json")
+        assert catalog.search_fts("updated")[0]["sha256"] == "a" * 64
+        assert catalog.search_fts("original") == []
+
+    def test_fts_synced_on_remove(self, catalog):
+        r = _make_result(sha="a" * 64, title="searchable title")
+        catalog.insert(r, "/a.json")
+        catalog.remove(r["sha256"])
+        assert catalog.search_fts("searchable") == []
+
+    def test_special_chars_do_not_raise(self, catalog):
+        # FTS5 operators in user input are neutralized by phrase quoting — the
+        # call must not raise an OperationalError regardless of input.
+        catalog.insert(_make_result(sha="a" * 64, title="Q2 earnings up"), "/a.json")
+        catalog.search_fts('earnings "up OR AND')  # no parse error
+        catalog.search_fts("foo*bar")
+        catalog.search_fts("(parens)")
+
+    def test_backfill_from_existing_items(self, tmp_path):
+        # Simulate a catalog.db written before the FTS table existed: drop the
+        # FTS rows after insert, then reopen to trigger the backfill.
+        db = tmp_path / "cat.db"
+        c1 = Catalog(db)
+        c1.insert(_make_result(sha="a" * 64, title="historical row"), "/a.json")
+        c1._conn.execute("DELETE FROM items_fts")
+        c1._conn.commit()
+        c1.close()
+
+        c2 = Catalog(db)
+        rows = c2.search_fts("historical")
+        assert len(rows) == 1
+        c2.close()
