@@ -13,12 +13,24 @@ from fastapi.responses import StreamingResponse, JSONResponse, HTMLResponse
 
 from .broadcast import BroadcastHub
 from .filters import matches_filter
+from .subject_query import query_by_subject
 
 logger = logging.getLogger(__name__)
 
 
-def create_app(hub: BroadcastHub, catalog) -> FastAPI:
-    """Factory: create a FastAPI app wired to *hub* and *catalog*."""
+def create_app(
+    hub: BroadcastHub,
+    catalog,
+    *,
+    calendar_db_path: Path | None = None,
+    macro_db_path: Path | None = None,
+) -> FastAPI:
+    """Factory: create a FastAPI app wired to *hub* and *catalog*.
+
+    *calendar_db_path* and *macro_db_path* are optional read-only pointers
+    used by the subject-scoped items query to surface calendar events and
+    macro data points alongside tagged catalog rows.
+    """
 
     app = FastAPI(title="News SSE API", version="0.1.0")
 
@@ -90,6 +102,8 @@ def create_app(hub: BroadcastHub, catalog) -> FastAPI:
     # ── GET /items (REST historical query) ────────────────────────────────
     @app.get("/items")
     async def items(
+        subject: str | None = Query(None),
+        min_confidence: float = Query(0.0, ge=0.0, le=1.0),
         impact_level: str | None = Query(None),
         market: str | None = Query(None),
         asset_class: str | None = Query(None),
@@ -98,6 +112,18 @@ def create_app(hub: BroadcastHub, catalog) -> FastAPI:
         event_type: str | None = Query(None),
         limit: int = Query(50, ge=1, le=500),
     ):
+        # Subject-scoped cross-source query (catalog + calendar + macro_data).
+        if subject:
+            rows = query_by_subject(
+                catalog,
+                subject,
+                calendar_db_path=calendar_db_path,
+                macro_db_path=macro_db_path,
+                min_confidence=min_confidence,
+                limit=limit,
+            )
+            return JSONResponse(rows)
+
         filters = dict(
             impact_level=impact_level,
             market=market,

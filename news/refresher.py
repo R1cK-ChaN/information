@@ -56,6 +56,8 @@ from src.api import BroadcastHub, create_app
 _CATALOG_DEFAULT     = _INFO / "output" / "catalog.db"
 _INFO_LAYER_DEFAULT  = _INFO / "6_information_layer"
 _EXPORT_DEFAULT      = _INFO.parent / "rag-service" / "scripts" / "export_information_layer.py"
+_CALENDAR_DB_DEFAULT = _INFO / "calendar" / "calendar.db"
+_MACRO_DB_DEFAULT    = _INFO / "data" / "macro_data_layer" / "data" / "macro_data.db"
 
 # ── config ────────────────────────────────────────────────────────────────────
 INTERVAL        = int(os.getenv("REFRESH_INTERVAL_SECONDS", "900"))
@@ -65,6 +67,8 @@ RAG_API_KEY     = os.getenv("RAG_API_KEY", "")
 CATALOG_PATH    = Path(os.getenv("CATALOG_PATH",    str(_CATALOG_DEFAULT)))
 INFO_LAYER_PATH = Path(os.getenv("INFO_LAYER_PATH", str(_INFO_LAYER_DEFAULT)))
 EXPORT_SCRIPT   = Path(os.getenv("EXPORT_SCRIPT",   str(_EXPORT_DEFAULT)))
+CALENDAR_DB_PATH = Path(os.getenv("CALENDAR_DB_PATH", str(_CALENDAR_DB_DEFAULT)))
+MACRO_DB_PATH    = Path(os.getenv("MACRO_DB_PATH",    str(_MACRO_DB_DEFAULT)))
 
 # SSE API config
 SSE_API_ENABLED  = os.getenv("SSE_API_ENABLED", "true").lower() in ("true", "1", "yes")
@@ -448,7 +452,12 @@ async def _run_api_server(hub: BroadcastHub, catalog) -> None:
     """Run the SSE API server via uvicorn programmatic API."""
     import uvicorn
 
-    app = create_app(hub, catalog)
+    app = create_app(
+        hub,
+        catalog,
+        calendar_db_path=CALENDAR_DB_PATH,
+        macro_db_path=MACRO_DB_PATH,
+    )
     config = uvicorn.Config(
         app,
         host=SSE_API_HOST,
