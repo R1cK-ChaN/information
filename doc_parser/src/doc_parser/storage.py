@@ -38,8 +38,24 @@ def has_result(extraction_path: Path, sha: str) -> bool:
 
 
 def save_to_catalog(catalog: Catalog, result: dict, json_path: Path) -> None:
-    """Insert a result into the shared catalog after JSON write."""
-    catalog.insert(result, json_path)
+    """Insert a result into the shared catalog after JSON write.
+
+    If the catalog has a ``tagger`` attached (a ``widgets.tagger.SubjectTagger``),
+    tag the item on the way in: title regex at confidence 0.8, plus the
+    LLM-extracted ``subject_id`` interpreted as a FRED series at confidence 1.0
+    when it matches the alias table. Structured hits win ties.
+    """
+    subjects = None
+    tagger = getattr(catalog, "tagger", None)
+    if tagger is not None:
+        merged: dict[str, float] = {}
+        for sid, conf in tagger.tag_text(result.get("title")):
+            merged[sid] = conf
+        for sid, conf in tagger.tag_fred_series(result.get("subject_id")):
+            if conf > merged.get(sid, 0.0):
+                merged[sid] = conf
+        subjects = sorted(merged.items())
+    catalog.insert(result, json_path, subjects=subjects)
 
 
 def list_results(extraction_path: Path) -> list[dict]:

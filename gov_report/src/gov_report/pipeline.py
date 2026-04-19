@@ -194,8 +194,20 @@ async def _process_pdf(
 
 
 def _open_catalog(settings: Settings) -> Catalog:
-    """Open the catalog DB in the extraction (output) directory."""
-    return Catalog(settings.extraction_path / "catalog.db")
+    """Open the catalog DB in the extraction (output) directory.
+
+    Also sync the subject vocabulary from ``config/subjects.yaml`` and attach
+    a ``SubjectTagger`` so ``save_to_catalog`` tags items on the way in.
+    """
+    catalog = Catalog(settings.extraction_path / "catalog.db")
+    try:
+        from widgets.subjects_loader import sync_from_yaml
+        from widgets.tagger import SubjectTagger
+        sync_from_yaml(catalog)
+        catalog.tagger = SubjectTagger(catalog)
+    except FileNotFoundError:
+        logger.warning("config/subjects.yaml not found; subject tagging disabled")
+    return catalog
 
 
 async def process_source(

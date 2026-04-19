@@ -28,6 +28,8 @@ from .common.export import (
 )
 
 from widgets.catalog import Catalog
+from widgets.subjects_loader import sync_from_yaml
+from widgets.tagger import SubjectTagger
 
 logger = logging.getLogger(__name__)
 
@@ -71,8 +73,17 @@ class NewsStream:
         self._output_dir = (_PROJECT_ROOT / output_dir).resolve()
         self._output_dir.mkdir(parents=True, exist_ok=True)
 
-        # Shared catalog
+        # Shared catalog + subject tagger
         self.catalog = Catalog(self._output_dir / "catalog.db")
+        try:
+            sync_from_yaml(self.catalog)
+            self.tagger = SubjectTagger(self.catalog)
+            self.catalog.tagger = self.tagger
+        except FileNotFoundError:
+            logger.warning(
+                "config/subjects.yaml not found; subject tagging disabled"
+            )
+            self.tagger = None
 
         # Registry
         self.registry = Registry()
@@ -506,7 +517,11 @@ class NewsStream:
 
             result = convert_item(item)
             json_path = save_extraction(result, self._output_dir)
-            self.catalog.insert(result, json_path)
+            subjects = (
+                self.tagger.tag_text(result.get("title"))
+                if self.tagger is not None else None
+            )
+            self.catalog.insert(result, json_path, subjects=subjects)
             if self.on_store:
                 self.on_store(result)
             stored += 1
@@ -540,7 +555,18 @@ class NewsStream:
                 result = convert_item(item)
 
             json_path = save_extraction(result, self._output_dir)
-            self.catalog.insert(result, json_path)
+            subjects = None
+            if self.tagger is not None:
+                merged: dict[str, float] = {}
+                for sid, conf in self.tagger.tag_text(result.get("title")):
+                    merged[sid] = conf
+                for sid, conf in self.tagger.tag_fred_series(
+                    result.get("subject_id")
+                ):
+                    if conf > merged.get(sid, 0.0):
+                        merged[sid] = conf
+                subjects = sorted(merged.items())
+            self.catalog.insert(result, json_path, subjects=subjects)
             if self.on_store:
                 self.on_store(result)
             stored += 1
