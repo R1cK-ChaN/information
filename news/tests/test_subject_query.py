@@ -42,10 +42,17 @@ def seeded_env(tmp_path):
 
     now = int(time.time())
 
-    # --- Catalog: news, newsletter, gov_report rows, all CPI-tagged ---
+    # --- Catalog: news + newsletter + gov_report rows, all CPI-tagged ---
+    # In production, newsletter items flow through the same `convert_item`
+    # helper as RSS news and land with source="news" (see
+    # news/src/common/export.py:110). We reproduce that here rather than
+    # invent a "newsletter" source that never appears in the catalog.
+    # The test still demonstrates cross-source merging because distinct
+    # source prefixes (news / gov_report:* / calendar / macro_data) land
+    # in the result.
     for sha, source, title, ts in [
         ("a" * 64, "news", "US CPI ticks up to 3.2% in June", now),
-        ("b" * 64, "newsletter", "Deep dive: what the CPI print means", now - 10),
+        ("b" * 64, "news", "Deep dive: what the CPI print means (newsletter)", now - 10),
         ("c" * 64, "gov_report:us_bls", "BLS CPI Release — June 2025", now - 20),
     ]:
         result = {
@@ -101,17 +108,17 @@ def seeded_env(tmp_path):
 
 
 class TestQueryBySubject:
-    def test_returns_all_five_sources_for_cpi(self, seeded_env):
+    def test_returns_all_cross_source_rows_for_cpi(self, seeded_env):
         catalog, cal_path, mac_path = seeded_env
         items = query_by_subject(
-            catalog, "econ.us.cpi",
+            catalog, "econ.cpi",
             calendar_db_path=cal_path,
             macro_db_path=mac_path,
         )
         sources = {it["source"] for it in items}
-        # news, newsletter, gov_report:us_bls, calendar, macro_data
+        # news (covers both RSS and newsletter production paths),
+        # gov_report:us_bls, calendar, macro_data — 4 distinct source kinds.
         assert "news" in sources
-        assert "newsletter" in sources
         assert any(s.startswith("gov_report") for s in sources)
         assert "calendar" in sources
         assert "macro_data" in sources
@@ -120,7 +127,7 @@ class TestQueryBySubject:
     def test_structured_sources_have_confidence_1(self, seeded_env):
         catalog, cal_path, mac_path = seeded_env
         items = query_by_subject(
-            catalog, "econ.us.cpi",
+            catalog, "econ.cpi",
             calendar_db_path=cal_path, macro_db_path=mac_path,
         )
         for it in items:
@@ -129,8 +136,8 @@ class TestQueryBySubject:
 
     def test_catalog_only_when_external_dbs_missing(self, seeded_env):
         catalog, _, _ = seeded_env
-        items = query_by_subject(catalog, "econ.us.cpi")
-        # No external dbs → only catalog rows
+        items = query_by_subject(catalog, "econ.cpi")
+        # No external dbs → only the 3 catalog rows.
         assert len(items) == 3
         assert all(it["source"] != "calendar" for it in items)
         assert all(it["source"] != "macro_data" for it in items)
@@ -145,9 +152,9 @@ class TestQueryBySubject:
 
     def test_min_confidence_filters_news(self, seeded_env):
         catalog, cal_path, mac_path = seeded_env
-        # News/newsletter/gov were tagged at confidence 0.8 (title regex)
+        # Catalog rows were tagged at confidence 0.8 (title regex).
         items = query_by_subject(
-            catalog, "econ.us.cpi",
+            catalog, "econ.cpi",
             calendar_db_path=cal_path, macro_db_path=mac_path,
             min_confidence=0.9,
         )
@@ -158,7 +165,7 @@ class TestQueryBySubject:
     def test_limit_is_respected(self, seeded_env):
         catalog, cal_path, mac_path = seeded_env
         items = query_by_subject(
-            catalog, "econ.us.cpi",
+            catalog, "econ.cpi",
             calendar_db_path=cal_path, macro_db_path=mac_path,
             limit=2,
         )

@@ -1,18 +1,18 @@
-{"title": "US CPI rises to 3.2% in June", "expected_subjects": ["econ.us.cpi"]}
-{"title": "Core CPI cools to 3.1% as shelter moderates", "expected_subjects": ["econ.us.cpi"]}
-{"title": "Headline inflation picks up, consumer prices climb 0.3%", "expected_subjects": ["econ.us.cpi"]}
-{"title": "PPI shocks to upside on energy rebound", "expected_subjects": ["econ.us.ppi"]}
-{"title": "Producer price index higher than forecast", "expected_subjects": ["econ.us.ppi"]}
+{"title": "US CPI rises to 3.2% in June", "expected_subjects": ["econ.cpi"]}
+{"title": "Core CPI cools to 3.1% as shelter moderates", "expected_subjects": ["econ.cpi"]}
+{"title": "Headline inflation picks up, consumer prices climb 0.3%", "expected_subjects": ["econ.cpi"]}
+{"title": "PPI shocks to upside on energy rebound", "expected_subjects": ["econ.ppi"]}
+{"title": "Producer price index higher than forecast", "expected_subjects": ["econ.ppi"]}
 {"title": "Core PCE edges lower, Fed's preferred gauge cools", "expected_subjects": ["econ.us.core_pce"]}
 {"title": "Personal consumption expenditures rise 0.2%", "expected_subjects": ["econ.us.core_pce"]}
 {"title": "Nonfarm payrolls surge to 300k in July", "expected_subjects": ["econ.us.nfp"]}
 {"title": "NFP headline beats, wage growth stays hot", "expected_subjects": ["econ.us.nfp"]}
 {"title": "Jobs report blows past estimates", "expected_subjects": ["econ.us.nfp"]}
-{"title": "Unemployment rate ticks down to 3.8%", "expected_subjects": ["econ.us.unemployment"]}
-{"title": "Jobless rate holds at 4.0% in latest print", "expected_subjects": ["econ.us.unemployment"]}
-{"title": "US GDP grows 2.4% annualized in Q2", "expected_subjects": ["econ.us.gdp"]}
-{"title": "Gross domestic product surprises to the upside", "expected_subjects": ["econ.us.gdp"]}
-{"title": "Retail sales disappoint as consumers retrench", "expected_subjects": ["econ.us.retail_sales"]}
+{"title": "Unemployment rate ticks down to 3.8%", "expected_subjects": ["econ.unemployment"]}
+{"title": "Jobless rate holds at 4.0% in latest print", "expected_subjects": ["econ.unemployment"]}
+{"title": "US GDP grows 2.4% annualized in Q2", "expected_subjects": ["econ.gdp"]}
+{"title": "Gross domestic product surprises to the upside", "expected_subjects": ["econ.gdp"]}
+{"title": "Retail sales disappoint as consumers retrench", "expected_subjects": ["econ.retail_sales"]}
 {"title": "FOMC holds rates steady, signals two more cuts in 2025", "expected_subjects": ["rate.us.fed_funds"]}
 {"title": "Fed funds futures price 50% chance of July cut", "expected_subjects": ["rate.us.fed_funds"]}
 {"title": "Federal funds rate target range unchanged", "expected_subjects": ["rate.us.fed_funds"]}

@@ -38,7 +38,7 @@ class TestLoader:
         subjects = load_subjects_yaml(SEED_YAML)
         assert len(subjects) == 20
         ids = {s["id"] for s in subjects}
-        assert "econ.us.cpi" in ids
+        assert "econ.cpi" in ids
         assert "rate.us.fed_funds" in ids
         assert "commodity.wti" in ids
 
@@ -52,7 +52,7 @@ class TestLoader:
     def test_sync_populates_tables(self, seeded_catalog):
         rows = seeded_catalog.list_subjects()
         assert len(rows) == 20
-        cpi_aliases = seeded_catalog.get_aliases("econ.us.cpi", "fred_series")
+        cpi_aliases = seeded_catalog.get_aliases("econ.cpi", "fred_series")
         assert "CPIAUCSL" in cpi_aliases
 
     def test_sync_is_idempotent(self, seeded_catalog):
@@ -67,11 +67,11 @@ class TestLoader:
 class TestTagStructured:
     def test_fred_series_exact_match(self, tagger):
         tags = tagger.tag_fred_series("CPIAUCSL")
-        assert tags == [("econ.us.cpi", 1.0)]
+        assert tags == [("econ.cpi", 1.0)]
 
     def test_fred_series_case_insensitive(self, tagger):
         tags = tagger.tag_fred_series("cpiaucsl")
-        assert tags == [("econ.us.cpi", 1.0)]
+        assert tags == [("econ.cpi", 1.0)]
 
     def test_fred_series_unknown_returns_empty(self, tagger):
         assert tagger.tag_fred_series("UNKNOWN_SERIES_XYZ") == []
@@ -79,12 +79,12 @@ class TestTagStructured:
     def test_fred_series_multiple(self, tagger):
         tags = tagger.tag_fred_series(["CPIAUCSL", "FEDFUNDS"])
         sids = {t[0] for t in tags}
-        assert sids == {"econ.us.cpi", "rate.us.fed_funds"}
+        assert sids == {"econ.cpi", "rate.us.fed_funds"}
         assert all(conf == 1.0 for _, conf in tags)
 
     def test_calendar_indicator_case_insensitive(self, tagger):
-        assert tagger.tag_calendar_indicator("CPI") == [("econ.us.cpi", 1.0)]
-        assert tagger.tag_calendar_indicator("cpi") == [("econ.us.cpi", 1.0)]
+        assert tagger.tag_calendar_indicator("CPI") == [("econ.cpi", 1.0)]
+        assert tagger.tag_calendar_indicator("cpi") == [("econ.cpi", 1.0)]
 
     def test_calendar_indicator_multi_word(self, tagger):
         tags = tagger.tag_calendar_indicator("Nonfarm Payrolls")
@@ -95,7 +95,7 @@ class TestTagStructured:
             fred_series="PAYEMS", calendar_indicator="CPI"
         )
         sids = {t[0] for t in tags}
-        assert sids == {"econ.us.nfp", "econ.us.cpi"}
+        assert sids == {"econ.us.nfp", "econ.cpi"}
 
 
 # ----- Tagger: text ---------------------------------------------------------
@@ -105,17 +105,17 @@ class TestTagText:
     def test_exact_cpi_match(self, tagger):
         tags = tagger.tag_text("US CPI ticks higher in June")
         sids = {t[0] for t in tags}
-        assert "econ.us.cpi" in sids
+        assert "econ.cpi" in sids
 
     def test_consumer_price_phrase(self, tagger):
         tags = tagger.tag_text("Consumer prices ease in Europe")
         sids = {t[0] for t in tags}
-        assert "econ.us.cpi" in sids
+        assert "econ.cpi" in sids
 
     def test_multi_subject_title(self, tagger):
         tags = tagger.tag_text("FOMC hikes 25bp after hot CPI print")
         sids = {t[0] for t in tags}
-        assert "econ.us.cpi" in sids
+        assert "econ.cpi" in sids
         assert "rate.us.fed_funds" in sids
 
     def test_word_boundary_prevents_substring_hit(self, tagger):
@@ -163,9 +163,9 @@ class TestCatalogSubjectsIntegration:
             "processed_at": int(time.time()),
         }
         seeded_catalog.insert(
-            result, "/tmp/t.json", subjects=[("econ.us.cpi", 0.8)]
+            result, "/tmp/t.json", subjects=[("econ.cpi", 0.8)]
         )
-        items = seeded_catalog.get_items_by_subject("econ.us.cpi")
+        items = seeded_catalog.get_items_by_subject("econ.cpi")
         assert len(items) == 1
         assert items[0]["sha256"] == "a" * 64
         assert items[0]["subject_confidence"] == 0.8
@@ -174,53 +174,53 @@ class TestCatalogSubjectsIntegration:
         sha = "b" * 64
         seeded_catalog.insert(
             {"sha256": sha, "processed_at": 1}, "/tmp/b.json",
-            subjects=[("econ.us.cpi", 0.8)],
+            subjects=[("econ.cpi", 0.8)],
         )
         # Second insert without subjects kwarg must NOT clear the tags.
         seeded_catalog.insert(
             {"sha256": sha, "processed_at": 2, "title": "updated"},
             "/tmp/b.json",
         )
-        assert len(seeded_catalog.get_items_by_subject("econ.us.cpi")) == 1
+        assert len(seeded_catalog.get_items_by_subject("econ.cpi")) == 1
 
     def test_insert_replaces_existing_tags(self, seeded_catalog):
         sha = "c" * 64
         seeded_catalog.insert(
             {"sha256": sha, "processed_at": 1}, "/tmp/c.json",
-            subjects=[("econ.us.cpi", 0.8)],
+            subjects=[("econ.cpi", 0.8)],
         )
         seeded_catalog.insert(
             {"sha256": sha, "processed_at": 2}, "/tmp/c.json",
             subjects=[("rate.us.fed_funds", 0.8)],
         )
-        assert seeded_catalog.get_items_by_subject("econ.us.cpi") == []
+        assert seeded_catalog.get_items_by_subject("econ.cpi") == []
         assert len(seeded_catalog.get_items_by_subject("rate.us.fed_funds")) == 1
 
     def test_min_confidence_filter(self, seeded_catalog):
         now = int(time.time())
         seeded_catalog.insert(
             {"sha256": "d" * 64, "processed_at": now}, "/tmp/d.json",
-            subjects=[("econ.us.cpi", 0.8)],
+            subjects=[("econ.cpi", 0.8)],
         )
         seeded_catalog.insert(
             {"sha256": "e" * 64, "processed_at": now}, "/tmp/e.json",
-            subjects=[("econ.us.cpi", 1.0)],
+            subjects=[("econ.cpi", 1.0)],
         )
-        low = seeded_catalog.get_items_by_subject("econ.us.cpi", min_confidence=0.0)
-        high = seeded_catalog.get_items_by_subject("econ.us.cpi", min_confidence=0.9)
+        low = seeded_catalog.get_items_by_subject("econ.cpi", min_confidence=0.0)
+        high = seeded_catalog.get_items_by_subject("econ.cpi", min_confidence=0.9)
         assert len(low) == 2
         assert len(high) == 1
 
     def test_get_items_orders_by_processed_at_desc(self, seeded_catalog):
         seeded_catalog.insert(
             {"sha256": "f" * 64, "processed_at": 100}, "/tmp/f.json",
-            subjects=[("econ.us.cpi", 0.8)],
+            subjects=[("econ.cpi", 0.8)],
         )
         seeded_catalog.insert(
             {"sha256": "g" * 64, "processed_at": 200}, "/tmp/g.json",
-            subjects=[("econ.us.cpi", 0.8)],
+            subjects=[("econ.cpi", 0.8)],
         )
-        items = seeded_catalog.get_items_by_subject("econ.us.cpi")
+        items = seeded_catalog.get_items_by_subject("econ.cpi")
         assert items[0]["sha256"] == "g" * 64
         assert items[1]["sha256"] == "f" * 64
 
@@ -296,7 +296,7 @@ class TestBackfill:
         stats = backfill(cat, tagger, dry_run=False)
         assert stats["total"] == 3
         assert stats["tagged"] == 2  # 'a' via title, 'b' via FRED series_id
-        cpi_items = cat.get_items_by_subject("econ.us.cpi")
+        cpi_items = cat.get_items_by_subject("econ.cpi")
         shas = {it["sha256"] for it in cpi_items}
         assert shas == {"a" * 64, "b" * 64}
         cat.close()
@@ -313,7 +313,7 @@ class TestBackfill:
         cat.insert(
             {"sha256": "a" * 64, "title": "CPI higher", "processed_at": 1},
             "/tmp/a.json",
-            subjects=[("econ.us.cpi", 0.8)],
+            subjects=[("econ.cpi", 0.8)],
         )
         stats = backfill(cat, tagger, dry_run=False)
         assert stats["skipped_already"] == 1
@@ -336,5 +336,64 @@ class TestBackfill:
         stats = backfill(cat, tagger, dry_run=True)
         assert stats["tagged"] == 1
         # No rows in item_subjects after dry-run.
-        assert cat.get_items_by_subject("econ.us.cpi") == []
+        assert cat.get_items_by_subject("econ.cpi") == []
         cat.close()
+
+    def test_run_dry_does_not_mutate_target(self, tmp_path):
+        """Dry-run CLI path must not CREATE TABLE, sync vocab, or insert into
+        item_subjects on the target DB.
+        """
+        import sqlite3
+        import sys
+        sys.path.insert(0, str(REPO_ROOT / "scripts"))
+        from backfill_subjects import run_dry
+
+        target = tmp_path / "preexisting.db"
+        # Build a pre-tagging catalog: only the items table exists, as would
+        # be the case for any DB created before this branch.
+        conn = sqlite3.connect(str(target))
+        conn.execute(
+            """CREATE TABLE items (
+                sha256 TEXT PRIMARY KEY, json_path TEXT, source TEXT,
+                title TEXT, subject_id TEXT, processed_at INTEGER
+            )"""
+        )
+        conn.execute(
+            "INSERT INTO items VALUES (?,?,?,?,?,?)",
+            ("a" * 64, "/tmp/a.json", "news", "CPI higher", None, 1),
+        )
+        conn.commit()
+        conn.close()
+
+        stats = run_dry(target, SEED_YAML)
+        assert stats == {"total": 1, "tagged": 1, "skipped_already": 0}
+
+        # Verify the target DB was not altered: only `items` should exist.
+        conn = sqlite3.connect(str(target))
+        tables = {
+            r[0] for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        }
+        conn.close()
+        assert tables == {"items"}, f"dry-run created tables: {tables - {'items'}}"
+
+    def test_run_dry_counts_pretagged_rows_as_skipped(self, tmp_path):
+        """When item_subjects exists and has rows, dry-run still reads it."""
+        import sys
+        sys.path.insert(0, str(REPO_ROOT / "scripts"))
+        from backfill_subjects import run_dry
+
+        target = tmp_path / "tagged.db"
+        cat = Catalog(target)
+        sync_from_yaml(cat, SEED_YAML)
+        cat.insert(
+            {"sha256": "a" * 64, "title": "CPI higher", "processed_at": 1},
+            "/tmp/a.json",
+            subjects=[("econ.cpi", 0.8)],
+        )
+        cat.close()
+
+        stats = run_dry(target, SEED_YAML)
+        assert stats["skipped_already"] == 1
+        assert stats["tagged"] == 0

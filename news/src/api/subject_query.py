@@ -21,6 +21,13 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+# Per-source caps prevent a freshly-synced external DB (e.g. a macro bulk
+# import) from flooding the merged result and pushing every news/calendar row
+# past the final `limit`. The final merge still honours `limit` overall.
+_CALENDAR_CAP = 20
+_MACRO_CAP = 10
+
+
 def query_by_subject(
     catalog,
     subject_id: str,
@@ -33,6 +40,8 @@ def query_by_subject(
     """Merge results from catalog, calendar, and macro_data for a subject.
 
     Returns a list of normalised item dicts sorted by date desc (best-effort).
+    Per-source caps bound how many rows each external DB can contribute so a
+    bulk macro sync can't push catalog/calendar rows out of the response.
     """
     aliases = _fetch_aliases(catalog, subject_id)
     if not aliases and not catalog.get_aliases(subject_id):
@@ -44,16 +53,18 @@ def query_by_subject(
     if calendar_db_path and calendar_db_path.exists():
         cal_aliases = aliases.get("calendar_indicator", [])
         if cal_aliases:
-            items.extend(
-                _from_calendar(calendar_db_path, subject_id, cal_aliases, limit)
-            )
+            items.extend(_from_calendar(
+                calendar_db_path, subject_id, cal_aliases,
+                min(_CALENDAR_CAP, limit),
+            ))
 
     if macro_db_path and macro_db_path.exists():
         fred_aliases = aliases.get("fred_series", [])
         if fred_aliases:
-            items.extend(
-                _from_macro(macro_db_path, subject_id, fred_aliases, limit)
-            )
+            items.extend(_from_macro(
+                macro_db_path, subject_id, fred_aliases,
+                min(_MACRO_CAP, limit),
+            ))
 
     items.sort(key=_sort_key, reverse=True)
     return items[:limit]
@@ -163,7 +174,9 @@ def _from_macro(
             "source": "macro_data",
             "title": f"{rd['series_id']}: {rd['value']}",
             "publish_date": rd["date"],
-            "processed_at": _parse_iso_epoch(rd.get("updated_at")),
+            # Sort by observation date, not ingest time, so a fresh macro sync
+            # doesn't promote years-old prints above today's news.
+            "processed_at": _parse_iso_epoch(rd["date"]),
             "institution": rd.get("source"),
             "subject_id": subject_id,
             "subject_confidence": 1.0,

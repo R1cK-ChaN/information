@@ -16,8 +16,12 @@ subjects:
 
   # ----- US economic indicators -----
 
-  - id: econ.us.cpi
-    display: "US CPI"
+  # Geo-neutral subjects: regex matches the concept without a country prefix,
+  # so the subject ID avoids claiming a specific country. If you need
+  # country-scoped results, filter by `country` on the returned rows.
+
+  - id: econ.cpi
+    display: "CPI"
     aliases:
       fred_series: [CPIAUCSL, CPILFESL, CUUR0000SA0]
       calendar_indicator: ["CPI", "Core CPI", "Consumer Price Index", "CPI MoM", "CPI YoY"]
@@ -27,8 +31,8 @@ subjects:
         - '\bheadline inflation\b'
         - '\bcore inflation\b'
 
-  - id: econ.us.ppi
-    display: "US PPI"
+  - id: econ.ppi
+    display: "PPI"
     aliases:
       fred_series: [PPIACO, PPIFIS]
       calendar_indicator: ["PPI", "Producer Price Index", "PPI MoM", "PPI YoY"]
@@ -56,8 +60,8 @@ subjects:
         - '\bjobs report\b'
         - '\bpayrolls report\b'
 
-  - id: econ.us.unemployment
-    display: "US Unemployment Rate"
+  - id: econ.unemployment
+    display: "Unemployment Rate"
     aliases:
       fred_series: [UNRATE]
       calendar_indicator: ["Unemployment Rate"]
@@ -65,8 +69,8 @@ subjects:
         - '\bunemployment rate\b'
         - '\bjobless rate\b'
 
-  - id: econ.us.gdp
-    display: "US GDP"
+  - id: econ.gdp
+    display: "GDP"
     aliases:
       fred_series: [GDPC1, GDP]
       calendar_indicator: ["GDP", "GDP Growth Rate", "GDP Annualized QoQ", "GDP QoQ"]
@@ -74,8 +78,8 @@ subjects:
         - '\bGDP\b'
         - '\bgross domestic product\b'
 
-  - id: econ.us.retail_sales
-    display: "US Retail Sales"
+  - id: econ.retail_sales
+    display: "Retail Sales"
     aliases:
       fred_series: [RSAFS, RRSFS]
       calendar_indicator: ["Retail Sales", "Retail Sales MoM", "Retail Sales YoY"]
