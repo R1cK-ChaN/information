@@ -65,7 +65,7 @@ def fetch_url(
         )
 
     try:
-        article = paywall_fetcher.fetch(url)
+        article = paywall_fetcher.fetch_article(url, "")
     except Exception as exc:  # pragma: no cover — defensive, paywall path is best-effort
         return FetchResult(
             url=url, status=resp.status_code, text="", error=f"paywall: {exc}"
@@ -74,6 +74,6 @@ def fetch_url(
     return FetchResult(
         url=url,
         status=resp.status_code,
-        text=(article.content or "")[:max_chars],
+        text=(getattr(article, "content", "") or "")[:max_chars],
         via_paywall=True,
     )

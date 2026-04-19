@@ -48,7 +48,9 @@ def search(query: str, *, limit: int = 5, timeout: float = 10.0) -> list[SearchR
         )
         resp.raise_for_status()
         payload = resp.json()
-    except httpx.HTTPError as exc:
+    except (httpx.HTTPError, ValueError) as exc:
+        # ValueError covers resp.json() failures when Brave returns a 200 with
+        # a non-JSON body (CDN error page, rate-limit HTML, etc).
         logger.warning("discovery.search failed for %r: %s", query, exc)
         return []
 

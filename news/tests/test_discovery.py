@@ -83,6 +83,22 @@ class TestSearch:
         monkeypatch.setattr(httpx, "get", raises)
         assert search("anything") == []
 
+    def test_returns_empty_on_non_json_body(self, monkeypatch):
+        """Brave occasionally serves a 200 with an HTML error page (CDN,
+        rate limit, auth edge). resp.json() raises ValueError — must not
+        escape the wrapper."""
+        monkeypatch.setenv("BRAVE_API_KEY", "fake")
+
+        def fake_get(url, params=None, headers=None, timeout=None):
+            return httpx.Response(
+                200,
+                text="<html>rate limit</html>",
+                request=httpx.Request("GET", url),
+            )
+
+        monkeypatch.setattr(httpx, "get", fake_get)
+        assert search("anything") == []
+
 
 class TestFetchUrl:
     def test_returns_body_on_200(self, monkeypatch):
@@ -116,8 +132,10 @@ class TestFetchUrl:
 
         monkeypatch.setattr(httpx, "get", fake_get)
 
+        # Must use the real PaywallFetcher method name (fetch_article) —
+        # a mis-named mock previously let the broken contract ship.
         class FakePaywall:
-            def fetch(self, url):
+            def fetch_article(self, url, rss_description):
                 class Art:
                     content = "rescued text"
                 return Art()
