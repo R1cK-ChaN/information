@@ -36,7 +36,7 @@ def tagger(seeded_catalog):
 class TestLoader:
     def test_seed_yaml_parses(self):
         subjects = load_subjects_yaml(SEED_YAML)
-        assert len(subjects) == 23
+        assert len(subjects) == 24
         ids = {s["id"] for s in subjects}
         assert "econ.cpi" in ids
         assert "rate.us.fed_funds" in ids
@@ -51,14 +51,14 @@ class TestLoader:
 
     def test_sync_populates_tables(self, seeded_catalog):
         rows = seeded_catalog.list_subjects()
-        assert len(rows) == 23
+        assert len(rows) == 24
         cpi_aliases = seeded_catalog.get_aliases("econ.cpi", "fred_series")
         assert "CPIAUCSL" in cpi_aliases
 
     def test_sync_is_idempotent(self, seeded_catalog):
         sync_from_yaml(seeded_catalog, SEED_YAML)
         sync_from_yaml(seeded_catalog, SEED_YAML)
-        assert len(seeded_catalog.list_subjects()) == 23
+        assert len(seeded_catalog.list_subjects()) == 24
 
 
 # ----- Tagger: structured ---------------------------------------------------

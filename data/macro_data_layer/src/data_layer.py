@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from .storage import Storage
 from .registry import Registry
 from .providers.fred import FREDProvider
+from .providers.fedwatch import FedWatchProvider
 from .vix_regime import classify_vix_regime
 
 logger = logging.getLogger(__name__)
@@ -330,6 +331,40 @@ class MacroDataLayer:
         logger.info("Bootstrap complete: %d series, %d vintages, %d errors",
                      results["series_loaded"], results["vintages_loaded"], len(results["errors"]))
         return results
+
+    def refresh_fedwatch(self, provider: FedWatchProvider | None = None) -> dict:
+        """Pull the latest FedWatch snapshot and persist it.
+
+        Stores the full forward curve in ``fedwatch_snapshots`` and mirrors a
+        single ``FEDWATCH_MIDPOINT`` row into ``macro_series`` so the implied
+        midpoint is queryable alongside other rate series.
+        """
+        import pandas as pd
+        provider = provider or FedWatchProvider()
+        snap = provider.fetch_latest()
+        if not snap.snapshot_date:
+            return {"snapshot_date": None, "meetings": 0}
+
+        self.storage.upsert_fedwatch_snapshot(
+            snap.snapshot_date,
+            [
+                (r.meeting_date, r.implied_rate, r.prob_move_pct,
+                 r.prob_is_cut, r.change_bps)
+                for r in snap.rows
+            ],
+        )
+
+        if snap.midpoint is not None:
+            df = pd.DataFrame([{
+                "date": pd.to_datetime(snap.snapshot_date),
+                "value": snap.midpoint,
+                "source": FedWatchProvider.provider_name,
+                "series_id": "FEDWATCH_MIDPOINT",
+            }])
+            self.storage.upsert_series("FEDWATCH_MIDPOINT:US", df)
+            self.storage.update_sync("FEDWATCH_MIDPOINT:US", snap.snapshot_date)
+
+        return {"snapshot_date": snap.snapshot_date, "meetings": len(snap.rows)}
 
     def close(self):
         """Close the storage connection."""

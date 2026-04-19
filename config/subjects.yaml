@@ -166,6 +166,16 @@ subjects:
         - '\bOBFR\b'
         - '\bovernight bank funding rate\b'
 
+  - id: rate.us.fedwatch
+    display: "US FedWatch (rate expectations)"
+    aliases:
+      fedwatch_series: [FEDWATCH_MIDPOINT]
+      title_regex:
+        - '\bFedWatch\b'
+        - '\brate expectation'
+        - '\bimplied (?:fed )?rate'
+        - '\bFOMC probabilit'
+
   # ----- Volatility & FX -----
 
   - id: vol.vix

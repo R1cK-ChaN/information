@@ -39,6 +39,18 @@ CREATE TABLE IF NOT EXISTS sync_log (
     refresh_count   INTEGER DEFAULT 0,
     error_count     INTEGER DEFAULT 0
 );
+
+CREATE TABLE IF NOT EXISTS fedwatch_snapshots (
+    snapshot_date TEXT NOT NULL,
+    meeting_date  TEXT NOT NULL,
+    implied_rate  REAL,
+    prob_move_pct REAL,
+    prob_is_cut   INTEGER,
+    change_bps    REAL,
+    PRIMARY KEY (snapshot_date, meeting_date)
+);
+CREATE INDEX IF NOT EXISTS idx_fedwatch_meeting
+    ON fedwatch_snapshots(meeting_date);
 """
 
 
@@ -61,6 +73,53 @@ class Storage:
         if "regime" not in cols:
             self.conn.execute("ALTER TABLE macro_series ADD COLUMN regime TEXT")
         self.conn.commit()
+
+    def upsert_fedwatch_snapshot(
+        self,
+        snapshot_date: str,
+        rows: list[tuple[str, float | None, float | None, bool, float | None]],
+    ) -> int:
+        """Upsert one FedWatch snapshot day.
+
+        Each row is ``(meeting_date, implied_rate, prob_move_pct, prob_is_cut,
+        change_bps)``. Replaces any existing rows for this snapshot_date.
+        """
+        self.conn.execute(
+            "DELETE FROM fedwatch_snapshots WHERE snapshot_date = ?",
+            (snapshot_date,),
+        )
+        self.conn.executemany(
+            """INSERT INTO fedwatch_snapshots
+               (snapshot_date, meeting_date, implied_rate, prob_move_pct,
+                prob_is_cut, change_bps)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            [
+                (snapshot_date, m, ir, pm, 1 if pc else 0, cb)
+                for m, ir, pm, pc, cb in rows
+            ],
+        )
+        self.conn.commit()
+        return len(rows)
+
+    def read_fedwatch_snapshot(self, snapshot_date: str) -> list[dict]:
+        """Return meeting rows for a given snapshot date, ordered by meeting."""
+        cur = self.conn.execute(
+            """SELECT meeting_date, implied_rate, prob_move_pct, prob_is_cut,
+                      change_bps
+               FROM fedwatch_snapshots
+               WHERE snapshot_date = ? ORDER BY meeting_date""",
+            (snapshot_date,),
+        )
+        return [
+            {
+                "meeting_date": r[0],
+                "implied_rate": r[1],
+                "prob_move_pct": r[2],
+                "prob_is_cut": bool(r[3]),
+                "change_bps": r[4],
+            }
+            for r in cur.fetchall()
+        ]
 
     def update_regime(self, series_key: str, rows: list[tuple[str, str | None]]) -> int:
         """Set the regime label for a list of ``(date, regime)`` rows on a series."""

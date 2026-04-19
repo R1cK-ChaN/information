@@ -59,7 +59,11 @@ def query_by_subject(
             ))
 
     if macro_db_path and macro_db_path.exists():
-        macro_aliases = list(aliases.get("fred_series", [])) + list(aliases.get("ny_fed_series", []))
+        macro_aliases = (
+            list(aliases.get("fred_series", []))
+            + list(aliases.get("ny_fed_series", []))
+            + list(aliases.get("fedwatch_series", []))
+        )
         if macro_aliases:
             items.extend(_from_macro(
                 macro_db_path, subject_id, macro_aliases,
