@@ -16,6 +16,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY information/widgets/ /app/information/widgets/
 RUN pip install --no-cache-dir -e /app/information/widgets
 
+# ── shared subject vocabulary (required by the SubjectTagger) ────────────────
+# widgets/subjects_loader.py resolves config/subjects.yaml relative to the
+# repo root; without this COPY the container falls back to disabled tagging
+# and /items?subject=... returns an empty list.
+COPY information/config/ /app/information/config/
+
 # ── install news-stream ───────────────────────────────────────────────────────
 COPY information/news/ /app/information/news/
 RUN pip install --no-cache-dir -e /app/information/news \

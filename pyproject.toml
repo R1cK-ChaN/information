@@ -7,7 +7,7 @@ name = "analyst-widgets"
 version = "0.1.0"
 description = "Shared utilities for the analyst information layer"
 requires-python = ">=3.10"
-dependencies = []
+dependencies = ["pyyaml>=6.0"]
 
 [project.optional-dependencies]
 test = ["pytest>=8.0"]
